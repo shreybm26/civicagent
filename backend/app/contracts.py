@@ -180,6 +180,26 @@ class MessageIn(ContractModel):
         return value
 
 
+class LocationIn(ContractModel):
+    text: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("text")
+    @classmethod
+    def normalize_text(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("location text cannot be empty")
+        return value
+
+
+class FieldEditIn(ContractModel):
+    value: Any
+
+
+class ConfirmIn(ContractModel):
+    confirmed: bool
+
+
 def idle_session(session_id: UUID) -> SessionState:
     """Create a clean anonymous session without carrying prior user data."""
 

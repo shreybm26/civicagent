@@ -27,7 +27,8 @@ def test_create_message_and_reset_use_typed_shape() -> None:
         json={"message": "There is a pothole"},
     )
     assert message.status_code == 200
-    assert message.json()["state"] == "IDLE"
+    assert message.json()["state"] == "COLLECTING"
+    assert message.json()["service_id"] == "road_issue"
     assert message.json()["agent_message"]
 
     reset = client.post(f"/api/session/{session['session_id']}/reset")
