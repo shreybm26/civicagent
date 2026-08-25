@@ -1,10 +1,12 @@
 from uuid import uuid4
-from fastapi import FastAPI
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, field_validator
 from app.config import GEMINI_API_KEY, GEMINI_MODEL
+from app.provider import GeminiProvider
 
 app = FastAPI(title="CivicAgent API", version="0.1.0")
 sessions = {}
+provider = GeminiProvider()
 
 SERVICES = {
     "road_issue": {"name": "Road / Pothole Complaint", "department": "Roads & Infrastructure", "fields": ["location", "description", "severity"]},
@@ -14,6 +16,14 @@ SERVICES = {
 class MessageIn(BaseModel):
     message: str
 
+    @field_validator("message")
+    @classmethod
+    def validate_message(cls, value):
+        value = value.strip()
+        if not value:
+            raise ValueError("message cannot be empty")
+        return value
+
 def snapshot(session):
     service = SERVICES.get(session.get("service_id"))
     fields = [{"id": key, "value": session["fields"].get(key), "required": key in service["fields"]} for key in service["fields"]] if service else []
@@ -22,7 +32,12 @@ def snapshot(session):
 def process(session, text):
     lower = text.lower()
     if not session.get("service_id"):
-        session["service_id"] = "streetlight_issue" if "streetlight" in lower or "light" in lower else "road_issue"
+        candidate = provider.classify(text, SERVICES)
+        fallback = "streetlight_issue" if "streetlight" in lower or "light" in lower else "road_issue" if any(word in lower for word in ("pothole", "road", "street", "pavement")) else None
+        if not candidate.service_id and not fallback:
+            session["state"] = "idle"
+            return "I can currently help with potholes and streetlights. Which issue would you like to report?"
+        session["service_id"] = candidate.service_id or fallback
         session["fields"]["description"] = text
         session["state"] = "collecting"
         return "I can help report this. Where exactly is the issue?"
@@ -49,12 +64,17 @@ def create_session():
 
 @app.post("/api/session/{sid}/message")
 def message(sid: str, body: MessageIn):
-    session = sessions[sid]; reply = process(session, body.message)
+    session = sessions.get(sid)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    reply = process(session, body.message)
     result = snapshot(session); result["message"] = reply; return result
 
 @app.post("/api/session/{sid}/confirm")
 def confirm(sid: str):
-    session = sessions[sid]
+    session = sessions.get(sid)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
     if session["state"] != "reviewing": return {"error": "Complete required fields before confirming"}
     session["state"] = "completed"; session["receipt"] = {"reference": f"CIV-{sid[:8].upper()}", "status": "Received"}
     return snapshot(session)
