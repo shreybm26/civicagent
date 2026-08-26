@@ -11,9 +11,9 @@ Own backend runtime/config, release scripts, README, API backup client, safety/l
 ## Execution tasks
 
 - [ ] **N1 (P0, 45 min, 28 Aug 09:00)** Run clean startup/install/build/health/reset from documented commands; fix only reproducible P0 issues.
-- [ ] **N2 (P0, 45 min)** Run API E2E for all five scenarios, prompt injection, LLM timeout, invalid media/location, submission failure/retry, and schema switch; record results.
+- [ ] **N2 (P0, 45 min)** Run API E2E for all five scenarios, prompt injection, LLM timeout, invalid media/location, map-selected coordinate payloads, submission failure/retry, and schema switch; record results.
 - [ ] **N3 (P0, 30 min)** Scan logs/output for PII, secrets, addresses, phone patterns, image content, unsafe exceptions, and fabricated department/address values.
-- [ ] **N4 (P0, 30 min)** Measure service identification, conversation, image, location, submission, and five-turn latency against blueprint maximums in mock/live modes; lock mock mode if live exceeds limits.
+- [ ] **N4 (P0, 30 min)** Measure service identification, conversation, image, map/text location resolution, submission, and five-turn latency against blueprint maximums in mock/live modes; lock mock mode if live exceeds limits.
 - [ ] **N5 (P1, 45 min)** Add or fix deterministic reset, seeded fixture loading, provider health visibility, and API-level backup client under `tools/`.
 - [ ] **N6 (P0, 30 min, by 12:00)** Apply feature freeze: stop new behavior, mark P2/P3 tasks cut, and tag the demo candidate.
 - [ ] **N7 (P0, 30 min, by 13:00)** Apply code freeze and merge only tested P0 fixes; run health and smoke checks after each merge.
@@ -23,7 +23,7 @@ Own backend runtime/config, release scripts, README, API backup client, safety/l
 
 ## Frontend contribution
 
-Verify CORS, response/error rendering, upload limits, browser-compatible API behavior, and that the frontend never bypasses backend confirmation. Report UI defects with exact state/response, not ad hoc fixes in shared files.
+Verify CORS, response/error rendering, upload limits, browser-compatible API behavior, map-selected coordinate persistence, typed-location fallback, and that the frontend never bypasses backend confirmation. Report UI defects with exact state/response, not ad hoc fixes in shared files.
 
 ## Mock/stub and backup requirements
 
@@ -31,7 +31,7 @@ Keep `PROVIDER_MODE=mock` and seeded pothole/selfie responses as the default. Th
 
 ## Dependencies, contracts, and execution boundaries
 
-Dependencies: the Phase 3 frozen candidate and its recorded E2E failures. API contract: no endpoint or state changes after code freeze except a documented P0 fix; use [CONTRACTS.md](../CONTRACTS.md). Agent/AI work is N2/N4 provider fallback, latency, and prompt-injection verification. Backend work is N1-N5/N7-N10; frontend work is browser verification in the Frontend contribution section; integration/testing work is N2-N4/N8. Do not edit Shrey-owned components or add features after noon.
+Dependencies: the Phase 3 frozen candidate and its recorded E2E failures, including the locked mapping dependency/version and documented text fallback. API contract: no endpoint or state changes after code freeze except a documented P0 fix; use [CONTRACTS.md](../CONTRACTS.md). Agent/AI work is N2/N4 provider fallback, latency, and prompt-injection verification. Backend work is N1-N5/N7-N10; frontend work is browser verification in the Frontend contribution section; integration/testing work is N2-N4/N8. Do not edit Shrey-owned components or add features after noon.
 
 ## Commit boundaries
 

@@ -26,7 +26,7 @@ Use the complete Phase 3 implementation and contract fixtures. Keep mock provide
 
 ## 6. Current Code Modified
 
-Only fix reproducible P0/P1 defects, redact logs, improve loading/error text, update README/architecture diagram, add release scripts and test fixtures, and prepare screenshots/screen recording/API backup. No new user-facing feature after noon.
+Only fix reproducible P0/P1 defects, redact logs, improve loading/error text, verify the frozen map/location fallback behavior, update README/architecture diagram, add release scripts and test fixtures, and prepare screenshots/screen recording/API backup. No new user-facing feature after noon.
 
 ## 7. Current Code Rewritten/Deleted
 
@@ -34,7 +34,7 @@ Remove dead prototype path, unused dependencies, stale inline HTML, debug output
 
 ## 8. Architecture
 
-The frozen architecture remains one React client, one FastAPI backend, one deterministic workflow, five JSON schemas, curated location/image fixtures, in-memory task store, and mock civic receipt. `PROVIDER_MODE=mock` is the default for rehearsal and may be switched only after a live provider smoke call passes. A single health check and reset script establish a clean run. The API-level demo client mirrors HTTP contracts for browser failure.
+The frozen architecture remains one React client, one FastAPI backend, one deterministic workflow, five JSON schemas, curated location/image fixtures, an interactive Leaflet/OpenStreetMap location picker with typed text fallback, in-memory task store, and mock civic receipt. `PROVIDER_MODE=mock` is the default for rehearsal and may be switched only after a live provider smoke call passes. A single health check and reset script establish a clean run. The API-level demo client mirrors HTTP contracts for browser failure.
 
 ## 9. Nanda Work
 
@@ -70,11 +70,11 @@ Merge only tested commits. Nanda owns the final release branch integration. Shre
 
 ## 16. Testing
 
-Run unit/contract, API integration, component, E2E, five manual scenario checks, prompt injection, PII-log scan, media/location failure checks, latency sampling, 15-minute continuous-use test, clean-browser test, and API backup path. Record pass/fail with timestamp and build identifier in `docs/demo/verification.md`.
+Run unit/contract, API integration, component, E2E, five manual scenario checks, map pin selection/drag and coordinate persistence, geolocation permission denial, map-tile/network fallback to typed location, prompt injection, PII-log scan, media/location failure checks, latency sampling, 15-minute continuous-use test, clean-browser test, and API backup path. Record pass/fail with timestamp and build identifier in `docs/demo/verification.md`.
 
 ## 17. Risks
 
-Late provider outage, stale browser state, upload fixture path, CORS, broken build command, and a last-minute UI regression are the main risks. Default to mock mode, reset before every scenario, keep API client backup, and stop polishing at noon. Do not let a nice-to-have fix consume the emergency buffer.
+Late provider outage, stale browser state, map tile/network outage, geolocation permission differences, upload fixture path, CORS, broken build command, and a last-minute UI regression are the main risks. Default to mock mode, reset before every scenario, keep typed location and the API client as fallbacks, and stop polishing at noon. Do not let a nice-to-have fix consume the emergency buffer.
 
 ## 18. Deadline
 
@@ -90,6 +90,7 @@ Phase 4 starts **28 Aug 2026, 09:00 AM IST**. Final polish ends 12:00; feature f
 - [ ] Router is constrained to five IDs with safe ambiguity/provider fallback.
 - [ ] Collection, resolver, validation, and provenance rules pass tests.
 - [ ] Location matching resolves curated aliases and clarifies vague/ambiguous input.
+- [ ] The frozen browser path can select and drag a map marker, preserves the selected coordinates through review, and recovers to typed landmark/text location when map tiles or geolocation are unavailable.
 - [ ] Relevant image produces candidate evidence; irrelevant image is rejected gracefully.
 - [ ] Explicit confirmation is required; no auto-submit path exists.
 - [ ] `COMPLETED` is impossible without a mock backend receipt/reference ID.
@@ -101,4 +102,3 @@ Phase 4 starts **28 Aug 2026, 09:00 AM IST**. Final polish ends 12:00; feature f
 - [ ] Demo disclaimer and known limitations are visible and accurately framed.
 - [ ] Screenshots/recording/pitch notes and final submission material are ready by 2:45 PM.
 - [ ] No new features or untested changes remain after freeze.
-
