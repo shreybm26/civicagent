@@ -2,7 +2,7 @@
 
 ## 1. Phase Objective
 
-Join the deterministic backend and feature-owned React components into the complete judge-facing CivicAgent journey: natural entry, live field completion, location confirmation, evidence analysis, review/correction, explicit submission, receipt, and a second-service schema switch.
+Join the deterministic backend and feature-owned React components into the complete judge-facing CivicAgent journey: natural entry, live field completion, interactive map-based location confirmation, evidence analysis, review/correction, explicit submission, receipt, and a second-service schema switch.
 
 ## 2. Starting State
 
@@ -14,7 +14,7 @@ A clean browser can execute Scenario 1 end to end and then Scenario 2 without a 
 
 ## 4. Blueprint Requirements Covered
 
-- UX screens: landing/entry, chat, image input, live field panel, provenance, review card, edit/submit, receipt, errors/escalation.
+- UX screens: landing/entry, chat, image input, live field panel, provenance, map-based location picker/confirmation, review card, edit/submit, receipt, errors/escalation.
 - Demo scenes 1-7 and scripted scenarios 1-5.
 - Explicit citizen confirmation and editable pre-submission state.
 - Schema switch proving one engine/five schemas.
@@ -27,7 +27,7 @@ Reuse the Phase 1 React shell/API client and the Phase 2 graph, registry, servic
 
 ## 6. Current Code Modified
 
-Wire real API methods into `App.tsx`, replace placeholders with field/evidence/review/receipt features, add correction and reset callbacks, and adapt CORS/upload handling based on real browser behavior. Update README commands only after the integrated path is proven.
+Wire real API methods into `App.tsx`, replace placeholders with field/evidence/review/receipt features, add correction and reset callbacks, implement the interactive location picker, and adapt CORS/upload handling based on real browser behavior. Update README commands only after the integrated path is proven.
 
 ## 7. Current Code Rewritten/Deleted
 
@@ -35,7 +35,7 @@ Delete or archive `frontend/index.html` once the React build replaces it. Remove
 
 ## 8. Architecture
 
-The browser holds presentation state only: current `SessionView`, input/upload progress, and recoverable UI error. All workflow truth comes from backend responses. `ChatPanel` sends turns, `FieldPanel` renders schema and provenance, `EvidencePanel` uploads images, `LocationConfirmation` displays normalized/clarification state, `ReviewCard` sends corrections, `SubmitConfirm` invokes explicit confirmation, and `ReceiptPanel` renders backend proof. After `COMPLETED`, a new citizen issue invokes the backend's new-issue/schema-switch behavior; the previous receipt remains available as completed history or a compact success message. Mock mode must travel through the same service interfaces and UI.
+The browser holds presentation state only: current `SessionView`, input/upload progress, selected map coordinates, and recoverable UI error. All workflow truth comes from backend responses. `ChatPanel` sends turns, `FieldPanel` renders schema and provenance, `EvidencePanel` uploads images, and `LocationConfirmation` provides a Leaflet/OpenStreetMap map with a clickable/draggable marker, optional browser geolocation, readable address/coordinate confirmation, and text-entry fallback for denied permissions or unavailable map tiles. Map selections are submitted through the documented location contract; the backend remains authoritative and must never receive an unconfirmed submission. `ReviewCard` sends corrections, `SubmitConfirm` invokes explicit confirmation, and `ReceiptPanel` renders backend proof. After `COMPLETED`, a new citizen issue invokes the backend's new-issue/schema-switch behavior; the previous receipt remains available as completed history or a compact success message. Mock mode must travel through the same service interfaces and UI.
 
 ## 9. Nanda Work
 
@@ -59,9 +59,9 @@ The frontend sends only documented API operations. It never sets state directly,
 
 ## 14. File Ownership
 
-Nanda: backend integration entrypoints/routes/config, `frontend/src/features/intake/`, `frontend/src/features/location/`, `tests/integration/`, primary `tests/e2e/` spec.
+Nanda: backend integration entrypoints/routes/config, `frontend/src/features/intake/`, `frontend/src/features/location/`, location contract compatibility, `tests/integration/`, primary `tests/e2e/` spec.
 
-Shrey: `frontend/src/App.tsx`, `frontend/src/features/chat/`, `features/fields/`, `features/evidence/`, `features/review/`, `features/receipt/`, `frontend/src/lib/`, global CSS, component tests, demo fixtures.
+Shrey: `frontend/src/App.tsx`, `frontend/src/features/chat/`, `features/fields/`, `features/evidence/`, `features/review/`, `features/receipt/`, `frontend/src/lib/`, global CSS, package/lock dependency wiring for Leaflet, component tests, demo fixtures.
 
 Nanda must not edit App/global CSS. Shrey must not edit backend route registration/config.
 
@@ -71,11 +71,11 @@ First merge backend integration and run the API smoke path. Then Shrey switches 
 
 ## 16. Testing
 
-Run component tests for chat, fields/provenance, media rejection, review/edit, receipt, errors, and reset. Run integration tests for multipart upload, CORS, corrections, confirm gate, submission failure/retry, provider fallback, and schema switch. Run E2E/manual scripts for all five blueprint scenarios, plus prompt injection and a 15-minute continuous-use/reset test. Check text at mobile and desktop widths; P0 correctness wins over optional responsive polish.
+Run component tests for chat, fields/provenance, map rendering, marker click/drag, coordinate/address confirmation, geolocation denial, text fallback, media rejection, review/edit, receipt, errors, and reset. Run integration tests for multipart upload, CORS, map-selected location payloads, curated/text location fallback, corrections, confirm gate, submission failure/retry, provider fallback, and schema switch. Run E2E/manual scripts for all five blueprint scenarios, including a map-selected location and a text fallback path, plus prompt injection and a 15-minute continuous-use/reset test. Check text and map controls at mobile and desktop widths; P0 correctness wins over optional responsive polish.
 
 ## 17. Risks
 
-The largest risk is contract mismatch exposed only in the browser. Capture response fixtures from API tests and use them in component tests. Browser file upload, CORS, or unsafe rendering can cause late failures; exercise them early. Never render citizen/agent strings via `innerHTML`. If live provider output is flaky, lock demo mode to deterministic fixtures before Phase 4.
+The largest risk is contract mismatch exposed only in the browser. Capture response fixtures from API tests and use them in component tests. Map tile/network availability, browser geolocation permissions, marker precision, browser file upload, CORS, or unsafe rendering can cause late failures; exercise them early. Keep typed landmark/text entry as a visible fallback when map tiles or geolocation are unavailable. Never render citizen/agent strings via `innerHTML`. If live provider output is flaky, lock demo mode to deterministic fixtures before Phase 4.
 
 ## 18. Deadline
 
@@ -87,8 +87,8 @@ Functional integration deadline: **27 Aug 2026, 4:00 PM IST** for Demo Rehearsal
 - [ ] Scenario 2 switches to streetlight schema after completion.
 - [ ] Scenarios 3-5 have deterministic, understandable outcomes.
 - [ ] Location and image states are visible and recoverable.
+- [ ] A citizen can select or drag a location marker on the map, confirm the resulting address/coordinates, and continue using text location when map/geolocation access is unavailable.
 - [ ] Review shows every required field and provenance; correction works.
 - [ ] Submit is explicit and backend-gated; failure does not mark complete.
 - [ ] No unsafe HTML rendering, secret exposure, or PII logging.
 - [ ] Deterministic demo mode and reset work in the same UI.
-
