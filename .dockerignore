@@ -1,0 +1,15 @@
+.git
+.github
+.venv
+.env
+.env.*
+!.env.example
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+node_modules
+frontend/dist
+frontend/node_modules
+docs
+*.md
+CivicAgent_Hackathon_Build_Constitution_and_Execution_Blueprint.pdf

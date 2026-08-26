@@ -18,7 +18,7 @@ py tools/smoke.py
 py tools/api_demo.py
 ```
 
-Open the frontend through a static server, for example `npx vite --host 127.0.0.1`, then reset before each scenario.
+Open the frontend with `cd frontend; npm install; npm run dev`, then reset before each scenario. After a production build (`npm run build` in `frontend`), the API also serves the UI at `http://127.0.0.1:8000/`.
 
 ## Final checks
 

@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from app.main import app
+from app.main import FRONTEND_DIST, app
 
 
 client = TestClient(app)
@@ -50,3 +50,18 @@ def test_unknown_session_and_invalid_message_are_safe() -> None:
         json={"message": "   "},
     )
     assert invalid.status_code == 422
+
+
+def test_frontend_bundle_does_not_shadow_api_routes() -> None:
+    health = client.get("/health")
+    created = client.post("/api/session")
+    assert health.status_code == 200
+    assert created.status_code == 200
+
+    index = FRONTEND_DIST / "index.html"
+    if not index.is_file():
+        return
+
+    page = client.get("/")
+    assert page.status_code == 200
+    assert "text/html" in page.headers.get("content-type", "")
