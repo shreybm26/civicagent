@@ -1,0 +1,7 @@
+[
+ {"name":"JNTU Metro Station","area":"Kukatpally","city":"Hyderabad","pin":"500085","lat":17.4933,"lng":78.3914,"aliases":["jntu","jntu metro","near jntu","kukatpally metro"]},
+ {"name":"Hitech City Metro Station","area":"Madhapur","city":"Hyderabad","pin":"500081","lat":17.4483,"lng":78.3829,"aliases":["hitech city","hitech metro","madhapur metro"]},
+ {"name":"Charminar","area":"Old City","city":"Hyderabad","pin":"500002","lat":17.3616,"lng":78.4747,"aliases":["charminar","old city"]},
+ {"name":"Secunderabad Railway Station","area":"Secunderabad","city":"Hyderabad","pin":"500003","lat":17.4344,"lng":78.5013,"aliases":["secunderabad station","secunderabad railway"]},
+ {"name":"Ameerpet Metro Station","area":"Ameerpet","city":"Hyderabad","pin":"500016","lat":17.4375,"lng":78.4483,"aliases":["ameerpet","ameerpet metro"]}
+]

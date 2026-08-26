@@ -1,0 +1,50 @@
+{
+  "service_id": "garbage_issue",
+  "schema_version": "1.0",
+  "service_name": "Garbage Accumulation Complaint",
+  "description": "Report garbage accumulation or missed collection",
+  "department": "Sanitation Services",
+  "keywords": [
+    "garbage",
+    "trash",
+    "waste",
+    "dump",
+    "litter"
+  ],
+  "fields": [
+    {
+      "id": "location",
+      "type": "location",
+      "required": true
+    },
+    {
+      "id": "description",
+      "type": "text",
+      "required": true
+    },
+    {
+      "id": "severity",
+      "type": "choice",
+      "required": true,
+      "options": [
+        "low",
+        "medium",
+        "high"
+      ]
+    },
+    {
+      "id": "duration",
+      "type": "text",
+      "required": false
+    },
+    {
+      "id": "photo",
+      "type": "image",
+      "required": false
+    }
+  ],
+  "submission": {
+    "endpoint": "/api/submit",
+    "id_prefix": "CIV"
+  }
+}

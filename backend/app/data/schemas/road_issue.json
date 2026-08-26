@@ -1,0 +1,53 @@
+{
+  "service_id": "road_issue",
+  "schema_version": "1.0",
+  "service_name": "Road / Pothole Complaint",
+  "description": "Report road damage, potholes, or surface deterioration",
+  "department": "Roads & Infrastructure",
+  "keywords": [
+    "pothole",
+    "road",
+    "crack",
+    "damage",
+    "pavement",
+    "asphalt",
+    "surface"
+  ],
+  "fields": [
+    {
+      "id": "location",
+      "type": "location",
+      "required": true
+    },
+    {
+      "id": "description",
+      "type": "text",
+      "required": true
+    },
+    {
+      "id": "severity",
+      "type": "choice",
+      "required": true,
+      "options": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "image_derivable": true
+    },
+    {
+      "id": "photo",
+      "type": "image",
+      "required": false
+    },
+    {
+      "id": "landmark",
+      "type": "text",
+      "required": false
+    }
+  ],
+  "submission": {
+    "endpoint": "/api/submit",
+    "id_prefix": "CIV"
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "service_id": "streetlight_issue",
+  "schema_version": "1.0",
+  "service_name": "Streetlight Complaint",
+  "description": "Report a broken or inactive streetlight",
+  "department": "Electrical Services",
+  "keywords": [
+    "streetlight",
+    "street light",
+    "lamp",
+    "pole",
+    "light"
+  ],
+  "fields": [
+    {
+      "id": "location",
+      "type": "location",
+      "required": true
+    },
+    {
+      "id": "description",
+      "type": "text",
+      "required": true
+    },
+    {
+      "id": "pole_number",
+      "type": "text",
+      "required": false
+    },
+    {
+      "id": "duration",
+      "type": "text",
+      "required": true
+    },
+    {
+      "id": "time_noticed",
+      "type": "text",
+      "required": false
+    }
+  ],
+  "submission": {
+    "endpoint": "/api/submit",
+    "id_prefix": "CIV"
+  }
+}

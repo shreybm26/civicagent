@@ -1,0 +1,51 @@
+{
+  "service_id": "sanitation_issue",
+  "schema_version": "1.0",
+  "service_name": "Sanitation Complaint",
+  "description": "Report a sanitation or public hygiene issue",
+  "department": "Sanitation Services",
+  "keywords": [
+    "sanitation",
+    "sewage",
+    "drain",
+    "toilet",
+    "hygiene"
+  ],
+  "fields": [
+    {
+      "id": "location",
+      "type": "location",
+      "required": true
+    },
+    {
+      "id": "description",
+      "type": "text",
+      "required": true
+    },
+    {
+      "id": "issue_type",
+      "type": "choice",
+      "required": true,
+      "options": [
+        "sewage",
+        "drain",
+        "public_hygiene",
+        "other"
+      ]
+    },
+    {
+      "id": "duration",
+      "type": "text",
+      "required": false
+    },
+    {
+      "id": "photo",
+      "type": "image",
+      "required": false
+    }
+  ],
+  "submission": {
+    "endpoint": "/api/submit",
+    "id_prefix": "CIV"
+  }
+}
