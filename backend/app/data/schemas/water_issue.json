@@ -1,0 +1,57 @@
+{
+  "service_id": "water_issue",
+  "schema_version": "1.0",
+  "service_name": "Water Leak Complaint",
+  "description": "Report a water leak or supply infrastructure problem",
+  "department": "Water Services",
+  "keywords": [
+    "water",
+    "leak",
+    "pipe",
+    "burst",
+    "supply"
+  ],
+  "fields": [
+    {
+      "id": "location",
+      "type": "location",
+      "required": true
+    },
+    {
+      "id": "description",
+      "type": "text",
+      "required": true
+    },
+    {
+      "id": "leak_type",
+      "type": "choice",
+      "required": true,
+      "options": [
+        "pipe",
+        "tap",
+        "supply",
+        "unknown"
+      ]
+    },
+    {
+      "id": "severity",
+      "type": "choice",
+      "required": true,
+      "options": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "image_derivable": true
+    },
+    {
+      "id": "photo",
+      "type": "image",
+      "required": false
+    }
+  ],
+  "submission": {
+    "endpoint": "/api/submit",
+    "id_prefix": "CIV"
+  }
+}

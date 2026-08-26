@@ -1,0 +1,2 @@
+import type{Receipt}from"../../lib/types";
+export function ReceiptPanel({receipt,onReset}:{receipt:Receipt;onReset:()=>void}){return <section className="receipt"><span className="success">Received</span><h2>Complaint submitted</h2><p className="reference">{receipt.reference}</p><dl><dt>Status</dt><dd>{receipt.status}</dd><dt>Department</dt><dd>{receipt.department||"Civic services"}</dd></dl><p className="disclaimer">Demo receipt only. No live government system was contacted.</p><button onClick={onReset}>Report another issue</button></section>}

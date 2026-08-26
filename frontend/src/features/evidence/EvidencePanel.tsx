@@ -1,0 +1,1 @@
+export function EvidencePanel({onUpload,busy,result}:{onUpload:(f:File)=>void;busy:boolean;result?:string}){return <section className="evidence"><label className="upload">Add photo evidence<input type="file" accept="image/jpeg,image/png" disabled={busy} onChange={e=>e.target.files?.[0]&&onUpload(e.target.files[0])}/></label>{result&&<p role="status">{result}</p>}</section>}
