@@ -34,6 +34,7 @@ from ..policy.guardrails import (
 )
 from ..tools.location import resolve_location
 from ..tools.submit import SubmissionError, submit_state
+from ..integration_adapters import RegistrySchemaAdapter, SchemaRouterAdapter, SchemaCollectorAdapter, ImageAnalyzerAdapter
 from .schema import ServiceSchema, field_value_is_valid, mock_service_schemas
 from .ports import CollectorPort, ImagePort, MockCollector, MockImageService, MockRouter, RouterPort
 from .states import WorkflowError, WorkflowResult
@@ -52,7 +53,7 @@ class WorkflowGraph:
         collector: CollectorPort | None = None,
         image_service: ImagePort | None = None,
     ) -> None:
-        self.schemas = dict(schemas or mock_service_schemas())
+        self.schemas = dict(schemas or RegistrySchemaAdapter().as_graph_schemas())
         if set(self.schemas) != {
             "road_issue",
             "garbage_issue",
@@ -64,9 +65,9 @@ class WorkflowGraph:
         for schema in self.schemas.values():
             validate_schema_authority(schema)
         self.backend = backend or MockCivicBackend()
-        self.router = router or MockRouter()
-        self.collector = collector or MockCollector()
-        self.image_service = image_service or MockImageService()
+        self.router = router or SchemaRouterAdapter(self.schemas)
+        self.collector = collector or SchemaCollectorAdapter()
+        self.image_service = image_service or ImageAnalyzerAdapter()
 
     def view(self, state: SessionState, *, message: str | None = None) -> SessionView:
         schema = self.schema_for(state)
