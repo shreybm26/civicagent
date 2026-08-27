@@ -64,10 +64,10 @@ class GeminiClient:
             parsed = _parse_json_object(text)
             return parsed if isinstance(parsed, dict) else None
         except httpx.HTTPStatusError as exc:
-            logger.warning("gemini_fallback", extra={"civic_event": {"event": "provider_http_error", "status": exc.response.status_code}})
+            logger.warning("gemini_fallback http_status=%s", exc.response.status_code)
             return None
         except (httpx.RequestError, json.JSONDecodeError, KeyError, IndexError, TypeError) as exc:
-            logger.warning("gemini_fallback", extra={"civic_event": {"event": "provider_response_error", "error_type": type(exc).__name__}})
+            logger.warning("gemini_fallback error_type=%s", type(exc).__name__)
             return None
 
     def generate_image_json(self, prompt: str, content_type: str, content: bytes) -> dict[str, Any] | None:
@@ -84,12 +84,15 @@ class GeminiClient:
             response.raise_for_status()
             text = response.json().get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
             parsed = _parse_json_object(text)
+            if not isinstance(parsed, dict):
+                logger.warning("gemini_image_fallback error_type=MissingJsonObject")
+                return None
             return parsed if isinstance(parsed, dict) else None
         except httpx.HTTPStatusError as exc:
-            logger.warning("gemini_image_fallback", extra={"civic_event": {"event": "image_provider_http_error", "status": exc.response.status_code}})
+            logger.warning("gemini_image_fallback http_status=%s", exc.response.status_code)
             return None
         except (httpx.RequestError, json.JSONDecodeError, KeyError, IndexError, TypeError) as exc:
-            logger.warning("gemini_image_fallback", extra={"civic_event": {"event": "image_provider_response_error", "error_type": type(exc).__name__}})
+            logger.warning("gemini_image_fallback error_type=%s", type(exc).__name__)
             return None
 
 

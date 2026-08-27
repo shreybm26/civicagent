@@ -36,7 +36,16 @@ def build_api_router(
 
     @router.get("/health")
     def health() -> dict[str, object]:
-        return {"status": "ok", "provider": settings.provider_mode, "schemas": settings.schema_count}
+        return {
+            "status": "ok",
+            "provider": settings.provider_mode,
+            "schemas": settings.schema_count,
+            # Never return the key; this only confirms whether the live process
+            # constructed the Gemini-backed workflow ports.
+            "gemini_enabled": settings.provider_mode in {"gemini", "llm", "auto"} and bool(settings.gemini_api_key),
+            "gemini_model": settings.gemini_model if settings.gemini_api_key else None,
+            "gemini_timeout_seconds": settings.gemini_timeout_seconds,
+        }
 
     @router.post("/api/session", response_model=SessionView, status_code=status.HTTP_200_OK)
     def create_session() -> SessionView:
