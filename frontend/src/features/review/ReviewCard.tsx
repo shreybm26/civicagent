@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Field } from "../../lib/types";
+import { fieldHint, fieldLabel } from "../../lib/fieldLabels";
 
 const FIELD_OPTIONS: Record<string, string[]> = {
   severity: ["low", "medium", "high"],
@@ -80,11 +81,12 @@ export function ReviewCard({
           const value = drafts[field.id] ?? "";
           const unchanged = value === text(field);
           const options = FIELD_OPTIONS[field.id];
+          const hint = fieldHint(field.id, hindi);
           return (
             <div className="review-row" key={field.id}>
               <label htmlFor={`review-${field.id}`}>
                 <span>
-                  {field.id.replaceAll("_", " ")}
+                  {fieldLabel(field.id, hindi)}
                   {field.required ? " *" : ""}
                 </span>
                 {field.id === "photo" ? (
@@ -118,6 +120,7 @@ export function ReviewCard({
                     id={`review-${field.id}`}
                     value={value}
                     disabled={busy || saving !== null}
+                    placeholder={hint}
                     onChange={(event) =>
                       setDrafts((current) => ({ ...current, [field.id]: event.target.value }))
                     }
@@ -127,6 +130,7 @@ export function ReviewCard({
                     id={`review-${field.id}`}
                     value={value}
                     disabled={busy || saving !== null}
+                    placeholder={hint}
                     onChange={(event) =>
                       setDrafts((current) => ({ ...current, [field.id]: event.target.value }))
                     }

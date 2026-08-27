@@ -427,8 +427,14 @@ button.primary, .composer button.primary, .location .primary, .review .primary, 
 }
 .form-table th:nth-child(1),
 .form-table td:nth-child(1) {
-  width: 28%;
-  text-transform: capitalize;
+  width: 32%;
+  text-transform: none;
+  font-weight: 600;
+}
+.field-hint {
+  margin: 4px 0 8px;
+  color: var(--muted);
+  font-size: 13px;
 }
 .form-table th:nth-child(3),
 .form-table td:nth-child(3) {
@@ -544,7 +550,7 @@ button.primary, .composer button.primary, .location .primary, .review .primary, 
 .upload-button { position: relative; overflow: hidden; background: #fff8eb; border-color: var(--gold); color: #6a4b00; }
 .upload-button input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .location-fallback { margin-top: 12px; }
-.location-fallback label, .remaining-fields label, .remaining-label { display: block; font-weight: 700; margin: 8px 0; text-transform: capitalize; }
+.location-fallback label, .remaining-fields label, .remaining-label { display: block; font-weight: 700; margin: 8px 0; text-transform: none; }
 .location-fallback > div, .remaining-fields .remaining-input, .remaining-fields .choice-bubbles { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .location-fallback input, .remaining-fields input { min-width: 0; flex: 1; padding: 10px; border: 1px solid #7f8c98; border-radius: 2px; }
 .choice-bubbles { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }

@@ -1,6 +1,7 @@
 import { FormEvent, useState } from "react";
 import type { TrackingView } from "../../lib/types";
 import { CivicApiError, api } from "../../lib/api";
+import { fieldLabel } from "../../lib/fieldLabels";
 import { CredentialRow } from "../receipt/CredentialRow";
 import { EmailAckForm } from "../receipt/EmailAckForm";
 
@@ -191,7 +192,7 @@ function TrackingResult({
           <tbody>
             {record.fields.map((field) => (
               <tr key={field.id}>
-                <th>{field.id}</th>
+                <th>{fieldLabel(field.id, hindi)}</th>
                 <td>{formatValue(field.value)}</td>
               </tr>
             ))}

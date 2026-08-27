@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Field } from "../../lib/types";
+import { fieldHint, fieldLabel } from "../../lib/fieldLabels";
 
 const OPTIONS: Record<string, string[]> = {
   severity: ["low", "medium", "high"],
@@ -44,6 +45,8 @@ export function RemainingFieldsForm({
 
   const options = OPTIONS[field.id];
   const inputId = `remaining-${field.id}`;
+  const label = fieldLabel(field.id, hindi);
+  const hint = fieldHint(field.id, hindi);
 
   return (
     <div className="chat-step remaining-fields">
@@ -56,11 +59,12 @@ export function RemainingFieldsForm({
       <div className="remaining-field">
         {options ? (
           <span className="remaining-label" id={`${field.id}-label`}>
-            {field.id.replaceAll("_", " ")}
+            {label}
           </span>
         ) : (
-          <label htmlFor={inputId}>{field.id.replaceAll("_", " ")}</label>
+          <label htmlFor={inputId}>{label}</label>
         )}
+        {hint && <p className="field-hint">{hint}</p>}
         <div
           className={options ? "choice-bubbles" : "remaining-input"}
           role={options ? "group" : undefined}
@@ -84,6 +88,7 @@ export function RemainingFieldsForm({
               value={value}
               onChange={(event) => setValue(event.target.value)}
               disabled={busy}
+              placeholder={hint}
             />
           )}
           <button
