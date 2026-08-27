@@ -58,7 +58,7 @@ function frameWardLayer(
   boundsRef.current = bounds;
   map.fitBounds(bounds, { padding: [8, 8], animate: false });
   const fittedZoom = map.getZoom();
-  const baseZoom = fittedZoom + 0.08;
+  const baseZoom = fittedZoom + 0.05;
   baseZoomRef.current = baseZoom;
   map.setView(bounds.getCenter(), baseZoom, { animate: false });
   map.setMinZoom(baseZoom);
