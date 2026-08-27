@@ -27,7 +27,6 @@ export default function App() {
   const [hindi, setHindi] = useState(false);
   const [fontStep, setFontStep] = useState(1);
   const [avatarState, setAvatarState] = useState<AvatarState>("idle");
-  const [scrollToken, setScrollToken] = useState(0);
   const successTimerRef = useRef<number | null>(null);
   const onTrackPage = path === "/track";
 
@@ -83,7 +82,6 @@ export default function App() {
     setPendingAction(action);
     setAvatarState("processing");
     setError("");
-    setScrollToken((value) => value + 1);
     try {
       setSession(await task());
       setAvatarState("success");
@@ -324,22 +322,28 @@ export default function App() {
                   busy={busy}
                   hindi={hindi}
                   showSuggestions={session.state === "IDLE"}
-                  contextualStep={contextualStep}
-                  contextualKey={contextualKey}
+                  contextualStep={
+                    session.state === "COMPLETED" && session.receipt ? (
+                      <ReceiptPanel
+                        receipt={session.receipt}
+                        onReset={() => run(() => api.reset(session.session_id), "Reset failed.", "resetting")}
+                        onTrack={() => go("/track")}
+                        hindi={hindi}
+                      />
+                    ) : (
+                      contextualStep
+                    )
+                  }
+                  contextualKey={
+                    session.state === "COMPLETED" && session.receipt
+                      ? `receipt:${session.receipt.reference}`
+                      : contextualKey
+                  }
                   composerEnabled={composerEnabled}
                   mediaUrl={(mediaId) => mediaUrl(session.session_id, mediaId)}
                   pendingAction={pendingAction}
                   avatarState={avatarState}
-                  scrollToken={scrollToken}
                 />
-                {session.state === "COMPLETED" && session.receipt && (
-                  <ReceiptPanel
-                    receipt={session.receipt}
-                    onReset={() => run(() => api.reset(session.session_id), "Reset failed.", "resetting")}
-                    onTrack={() => go("/track")}
-                    hindi={hindi}
-                  />
-                )}
               </div>
               <FieldPanel
                 service={session.service?.name}

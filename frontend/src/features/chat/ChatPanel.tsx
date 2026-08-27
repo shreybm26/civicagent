@@ -13,17 +13,16 @@ type Props = {
   hindi: boolean;
   showSuggestions: boolean;
   contextualStep?: ReactNode;
-  /** Stable id for the current step so the form stays mounted across busy/stream. */
+  /** Stable id for the current step so the widget stays mounted across busy/stream. */
   contextualKey?: string;
   composerEnabled?: boolean;
   mediaUrl: (mediaId: string) => string;
   pendingAction?: PendingAction;
   avatarState?: AvatarState;
-  scrollToken?: number;
 };
 
 function messageKey(message: Message, index: number): string {
-  return `${message.role}-${message.timestamp}-${message.media_id ?? ""}-${message.text.slice(0, 48)}-${index}`;
+  return `${message.role}-${message.timestamp}-${message.media_id ?? ""}-${index}`;
 }
 
 export function ChatPanel({
@@ -38,34 +37,47 @@ export function ChatPanel({
   mediaUrl,
   pendingAction = null,
   avatarState = "idle",
-  scrollToken = 0,
 }: Props) {
   const [value, setValue] = useState("");
   const [awayFromLatest, setAwayFromLatest] = useState(false);
+  const [pendingCitizen, setPendingCitizen] = useState<string | null>(null);
   const [, setStreamTick] = useState(0);
   const [anchoredStep, setAnchoredStep] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
   const messagesRef = useRef<HTMLDivElement | null>(null);
-  const contextualRef = useRef<HTMLDivElement | null>(null);
   const nearBottomRef = useRef(true);
-  const forceScrollRef = useRef(false);
   const completedRef = useRef<Set<string>>(new Set());
 
-  const latestIndex = messages.length - 1;
-  const latest = latestIndex >= 0 ? messages[latestIndex] : null;
-  const latestKey = latest ? messageKey(latest, latestIndex) : "";
-  const needsStream = Boolean(!busy && latest && latest.role === "agent" && !completedRef.current.has(latestKey));
+  const displayMessages =
+    pendingCitizen && !messages.some((message) => message.role === "citizen" && message.text === pendingCitizen)
+      ? [
+          ...messages,
+          {
+            role: "citizen" as const,
+            text: pendingCitizen,
+            timestamp: "pending-citizen",
+            media_id: null,
+          },
+        ]
+      : messages;
 
   useEffect(() => {
-    forceScrollRef.current = true;
-  }, [scrollToken]);
+    if (busy || !pendingCitizen) return;
+    setPendingCitizen(null);
+  }, [busy, pendingCitizen, messages]);
+
+  const latestIndex = displayMessages.length - 1;
+  const latest = latestIndex >= 0 ? displayMessages[latestIndex] : null;
+  const latestKey = latest ? messageKey(latest, latestIndex) : "";
+  const needsStream = Boolean(
+    !busy && !pendingCitizen && latest && latest.role === "agent" && !completedRef.current.has(latestKey),
+  );
 
   useEffect(() => {
     if (!contextualStep || !contextualKey) {
       setAnchoredStep(null);
       return;
     }
-    // Anchor after the opening stream so the form does not vanish again while busy/saving.
     if (!needsStream) setAnchoredStep(contextualKey);
   }, [contextualStep, contextualKey, needsStream]);
 
@@ -74,25 +86,18 @@ export function ChatPanel({
   useEffect(() => {
     const box = messagesRef.current;
     if (!box) return;
-    if (forceScrollRef.current || nearBottomRef.current) {
-      endRef.current?.scrollIntoView({ block: "end" });
-      forceScrollRef.current = false;
-      setAwayFromLatest(false);
-      nearBottomRef.current = true;
-    } else {
+    if (!nearBottomRef.current) {
       setAwayFromLatest(true);
+      return;
     }
-  }, [messages, busy, needsStream, pendingAction, showContextual]);
-
-  useEffect(() => {
-    if (!showContextual) return;
-    contextualRef.current?.scrollIntoView({ block: "nearest" });
-  }, [showContextual, contextualKey]);
+    endRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
+    setAwayFromLatest(false);
+  }, [displayMessages.length, busy, needsStream, showContextual, pendingAction, pendingCitizen]);
 
   function onScroll() {
     const box = messagesRef.current;
     if (!box) return;
-    const near = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+    const near = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
     nearBottomRef.current = near;
     setAwayFromLatest(!near);
   }
@@ -100,25 +105,29 @@ export function ChatPanel({
   function submit(event: FormEvent) {
     event.preventDefault();
     if (!value.trim() || busy) return;
-    forceScrollRef.current = true;
-    onSend(value.trim());
+    const text = value.trim();
+    nearBottomRef.current = true;
+    setPendingCitizen(text);
     setValue("");
+    onSend(text);
   }
 
   function jumpLatest() {
+    nearBottomRef.current = true;
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
     setAwayFromLatest(false);
-    nearBottomRef.current = true;
   }
 
   function finishStream(key: string) {
     completedRef.current.add(key);
-    setStreamTick((value) => value + 1);
-    forceScrollRef.current = true;
+    setStreamTick((tick) => tick + 1);
+    if (nearBottomRef.current) {
+      endRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
+    }
   }
 
   const activity = activityLabel(pendingAction, hindi);
-  const latestAgent = [...messages].reverse().find((message) => message.role === "agent");
+  const latestAgent = [...displayMessages].reverse().find((message) => message.role === "agent");
 
   return (
     <section className="chat" aria-labelledby="assistant-title">
@@ -134,7 +143,7 @@ export function ChatPanel({
       </div>
 
       <div className="messages" ref={messagesRef} onScroll={onScroll}>
-        {messages.map((message, index) => {
+        {displayMessages.map((message, index) => {
           const key = messageKey(message, index);
           const localized = message.role === "citizen" ? message.text : localizeAgentText(message.text, hindi);
           const shouldStream = needsStream && key === latestKey;
@@ -183,6 +192,12 @@ export function ChatPanel({
           </div>
         )}
 
+        {showContextual && (
+          <div className="chat-inline-step" data-step={contextualKey}>
+            {contextualStep}
+          </div>
+        )}
+
         <div ref={endRef} />
       </div>
 
@@ -196,12 +211,6 @@ export function ChatPanel({
         </button>
       )}
 
-      {showContextual && (
-        <div className="chat-contextual" ref={contextualRef}>
-          {contextualStep}
-        </div>
-      )}
-
       {showSuggestions && (
         <div className="chips" aria-label={hindi ? "सुझाए गए मुद्दे" : "Suggested issues"}>
           {SUGGESTIONS.map((item) => (
@@ -210,7 +219,8 @@ export function ChatPanel({
               type="button"
               disabled={busy}
               onClick={() => {
-                forceScrollRef.current = true;
+                nearBottomRef.current = true;
+                setPendingCitizen(hindi ? item.textHi : item.text);
                 onSend(hindi ? item.textHi : item.text);
               }}
             >

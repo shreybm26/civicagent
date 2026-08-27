@@ -149,7 +149,7 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
 .chat {
   display: flex;
   flex-direction: column;
-  height: min(72vh, 720px);
+  height: min(78vh, 860px);
   border: 2px solid var(--navy);
   box-shadow: 0 8px 24px rgba(7, 41, 79, 0.12);
   position: relative;
@@ -203,8 +203,10 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
+  overflow-anchor: none;
   padding: 16px;
   background: var(--paper);
+  scroll-behavior: smooth;
 }
 .bubble {
   display: grid;
@@ -223,61 +225,55 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
 .bubble.agent { background: #fff; }
 .bubble.typing { color: var(--muted); }
 .bubble-body strong { display: block; font-size: 11px; margin-bottom: 4px; color: var(--navy); text-transform: uppercase; letter-spacing: 0.04em; }
-.chat-contextual {
+.chat-inline-step {
+  max-width: min(100%, 560px);
+  margin: 4px 0 14px;
   padding: 0;
-  flex: 0 1 auto;
-  max-height: min(52%, 420px);
-  min-height: 0;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  background: #fff;
-  border-top: 1px solid #edf0f2;
 }
-.chat-contextual > * {
-  min-height: 0;
-  max-height: 100%;
-}
-.chat-contextual .review,
-.chat-contextual .location,
-.chat-contextual .evidence,
-.chat-contextual .chat-step {
-  margin-bottom: 0;
-  border: none;
+.chat-inline-step .review,
+.chat-inline-step .location,
+.chat-inline-step .evidence,
+.chat-inline-step .chat-step,
+.chat-inline-step .receipt {
+  margin: 0;
+  border: 1px solid var(--line);
   box-shadow: none;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  max-height: 100%;
-  overflow: hidden;
+  background: #fff;
 }
-.chat-contextual .review > .panel-head {
-  flex: 0 0 auto;
+.chat-inline-step .location-map {
+  height: 240px;
+  width: 100%;
+  border: 1px solid var(--line);
+  background: #e8eef4;
 }
-.chat-contextual .chat-step,
-.chat-contextual .location,
-.chat-contextual .evidence {
-  overflow: auto;
-  padding: 12px 16px;
+.chat-inline-step .review-actions .primary {
+  width: 100%;
+  margin: 0;
+}
+.chat-inline-step .review-scroll {
+  max-height: none;
+  overflow: visible;
+}
+.chat-inline-step .review {
+  display: block;
+  overflow: visible;
+}
+.chat-inline-step .review-actions {
+  position: static;
+  border-top: 1px solid var(--line);
+  margin-top: 8px;
 }
 .review-scroll {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
   padding-bottom: 4px;
 }
 .review-actions {
-  flex: 0 0 auto;
-  position: sticky;
-  bottom: 0;
-  z-index: 2;
-  background: linear-gradient(#fff 70%, #f7fafc);
+  background: #fff;
   border-top: 1px solid var(--line);
   padding: 10px 16px 12px;
 }
 .review-actions .primary {
   margin: 0;
-  width: 100%;
+  width: min(100%, 320px);
 }
 .review-actions small {
   display: block;
@@ -509,8 +505,9 @@ button.primary, .composer button.primary, .location .primary, .review .primary, 
   .composer > div, .location-input { flex-wrap: wrap; }
   .composer input, .location input { flex-basis: 100%; }
   .seal { width: 52px; height: 52px; }
-  .chat { height: min(65vh, 560px); }
+  .chat { height: min(82vh, 720px); }
   .jump-latest { bottom: 108px; }
+  .chat-inline-step .location-map { height: 220px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

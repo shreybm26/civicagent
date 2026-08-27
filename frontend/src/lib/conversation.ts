@@ -8,16 +8,8 @@ const welcome: Message = {
 
 export function conversation(session: SessionView | null): Message[] {
   if (!session) return [welcome];
-  const messages = [...(session.messages ?? [])];
-  if (!messages.length) messages.push(welcome);
-  if (session.agent_message && messages[messages.length - 1]?.text !== session.agent_message) {
-    messages.push({
-      role: "agent",
-      text: session.agent_message,
-      timestamp: `${session.session_id}-agent-overlay`,
-    });
-  }
-  return messages;
+  const messages = session.messages ?? [];
+  return messages.length ? [...messages] : [welcome];
 }
 
 export const SUGGESTIONS = [

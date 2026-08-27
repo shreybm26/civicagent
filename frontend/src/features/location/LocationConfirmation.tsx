@@ -20,7 +20,8 @@ export function LocationConfirmation({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
-  const [open, setOpen] = useState(false);
+  // Open the map as soon as this step appears in the chat transcript.
+  const [open, setOpen] = useState(true);
   const [pick, setPick] = useState<Pick | null>(null);
   const [text, setText] = useState("");
   const [locating, setLocating] = useState(false);

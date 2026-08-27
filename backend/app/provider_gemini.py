@@ -190,7 +190,10 @@ class GeminiImageAnalyzer:
             f"{[{'id': field.id, 'type': field.field_type, 'options': list(field.options)} for field in schema.fields if field.image_derivable]}. "
             'Return JSON with relevant (boolean), relevance_confidence (0..1), reason, summary, '
             'details [{label,value,confidence,reason}], and candidates [{field_id,value,confidence,reason}]. '
-            "Return candidates only for facts directly visible in the image. An irrelevant image must return no candidates.",
+            "Return candidates only for facts directly visible in the image. An irrelevant image must return no candidates. "
+            "If a landmark field is available and readable signage, building names, malls, junctions, or landmarks "
+            "are visible (for example 'NEXUS FORUM' or an area name on a board), include a landmark candidate "
+            "with that readable text. Do not invent landmarks that are not visible.",
             content_type,
             content,
         )

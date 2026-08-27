@@ -45,7 +45,9 @@ def mock_service_schemas() -> dict[ServiceId, ServiceSchema]:
     a runnable mock until that registry is merged.
     """
 
-    text = lambda field_id, required=False: SchemaField(field_id, "text", required)
+    text = lambda field_id, required=False, image_derivable=False: SchemaField(
+        field_id, "text", required, (), image_derivable
+    )
     location = lambda: SchemaField("location", "location", True)
     choice = lambda field_id, options, required=True, image_derivable=False: SchemaField(
         field_id, "choice", required, tuple(options), image_derivable
@@ -60,7 +62,14 @@ def mock_service_schemas() -> dict[ServiceId, ServiceSchema]:
             "Report road damage, potholes, or surface deterioration",
             "Roads & Infrastructure",
             ("pothole", "road", "crack", "damage", "pavement", "asphalt", "surface"),
-            (location(), text("description", True), choice("severity", ("low", "medium", "high"), True, True), image(), additional(), text("landmark")),
+            (
+                location(),
+                text("description", True),
+                choice("severity", ("low", "medium", "high"), True, True),
+                image(),
+                additional(),
+                text("landmark", False, True),
+            ),
         ),
         "garbage_issue": ServiceSchema(
             "garbage_issue",
