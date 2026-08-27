@@ -51,7 +51,10 @@ export function LocationConfirmation({ onConfirm, onResolveText, busy, hindi }: 
     <p>{hindi ? "मानचित्र पर टैप करें या पिन खींचें।" : "Click the map or drag the pin, then confirm the selected location."}</p>
     <div ref={containerRef} className="location-map" aria-label="Draggable location map" />
     <p className="selected-location"><strong>{hindi ? "चयनित:" : "Selected:"}</strong> {pick.label}</p>
-    <div className="step-actions"><button type="button" onClick={locate} disabled={busy || locating}>{locating ? "Finding location..." : "Use my location"}</button><button type="button" className="primary" onClick={() => onConfirm(pick)} disabled={busy}>{hindi ? "स्थान की पुष्टि करें" : "Confirm location"}</button></div>
+    <div className="step-actions">
+      <button type="button" onClick={locate} disabled={busy || locating}>{locating ? (hindi ? "स्थान खोजा जा रहा है…" : "Finding location...") : (hindi ? "मेरा स्थान उपयोग करें" : "Use my location")}</button>
+      <button type="button" className="primary" onClick={() => onConfirm(pick)} disabled={busy}>{hindi ? "स्थान की पुष्टि करें" : "Confirm location"}</button>
+    </div>
     <div className="location-fallback"><label htmlFor="landmark">{hindi ? "या landmark लिखें" : "Or type a landmark or area"}</label><div><input id="landmark" value={text} onChange={(event) => setText(event.target.value)} placeholder="Near JNTU Metro" /><button type="button" onClick={() => text.trim() && onResolveText(text.trim())} disabled={busy || !text.trim()}>Use landmark</button></div></div>
   </div>;
 }
