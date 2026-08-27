@@ -9,7 +9,7 @@ from uuid import UUID
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
 
 from .config import Settings
-from .contracts import CivicError, ConfirmIn, FieldEditIn, LocationIn, MessageIn, SessionView
+from .contracts import CivicError, ConfirmIn, FieldEditIn, LocationIn, Message, MessageIn, SessionView
 from .provider_stub import ConversationProvider
 from .store import SessionNotFound, SessionStore
 from .workflow.graph import WorkflowGraph
@@ -111,9 +111,21 @@ def build_api_router(
 
 
 def _persist_result(store: SessionStore, graph: WorkflowGraph, result) -> SessionView:
+    _append_agent_turn(result.state, result.message)
     saved = store.save(result.state)
     _log_event(saved, result.event)
     return graph.view(saved, message=result.message)
+
+
+def _append_agent_turn(state, text: str | None) -> None:
+    """Keep agent replies in the transcript so the UI can render a conversation."""
+
+    if not text:
+        return
+    last = state.messages[-1] if state.messages else None
+    if last is not None and last.role == "agent" and last.text == text:
+        return
+    state.messages.append(Message(role="agent", text=text))
 
 
 def _get_state(store: SessionStore, session_id: UUID):

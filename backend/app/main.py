@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .api_entry import build_api_router
 from .config import PROJECT_ROOT, Settings, settings
+from .provider_gemini import build_workflow_ports
 from .provider_stub import ConversationProvider
 from .store import SessionStore
 from .workflow.graph import WorkflowGraph
@@ -47,7 +48,13 @@ def create_app(runtime_settings: Settings = settings) -> FastAPI:
     app = FastAPI(title="CivicAgent API", version="0.2.0")
     store = SessionStore(max_sessions=runtime_settings.max_sessions)
     provider = ConversationProvider()
-    workflow = WorkflowGraph()
+    schemas, router, collector, image_service = build_workflow_ports(runtime_settings)
+    workflow = WorkflowGraph(
+        schemas=schemas,
+        router=router,
+        collector=collector,
+        image_service=image_service,
+    )
 
     app.add_middleware(
         CORSMiddleware,

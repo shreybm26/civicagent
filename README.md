@@ -20,7 +20,9 @@ npm install
 npm run dev
 ```
 
-The default `PROVIDER_MODE=mock` is deterministic and requires no network or API key. Gemini can be configured through `.env` for experiments, but mock mode is the recommended demo path.
+The default `PROVIDER_MODE=mock` is deterministic and requires no network or API key. The assistant still completes the full lodge → location → evidence → review → receipt path using schema keywords and the Hyderabad location directory. Gemini is optional: set `PROVIDER_MODE=gemini` (or `auto`) and `GEMINI_API_KEY` only if you want live model proposals. The workflow still validates, and mock is used if Gemini fails.
+
+The browser UI is a Municipal Civic Cell demonstration portal (tricolor, bilingual chrome, grievance form). It is not an official government website and must not use the State Emblem.
 
 Run release checks with `py tools/smoke.py` and `py tools/api_demo.py` while the backend is running. See `docs/demo/release-checklist.md` for the complete rehearsal sequence.
 
@@ -42,7 +44,7 @@ Do not put the API on Vercel. Vercel functions are stateless; creating a session
 
    | Name | Value |
    | --- | --- |
-   | `PROVIDER_MODE` | `mock` |
+   | `PROVIDER_MODE` | `mock` (use `gemini` plus `GEMINI_API_KEY` only for live-model experiments) |
    | `MAX_SESSIONS` | `100` |
 
    Leave `VITE_API_URL` unset. Do not add `GEMINI_API_KEY` for the contest demo.

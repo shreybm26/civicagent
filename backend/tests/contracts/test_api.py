@@ -34,6 +34,8 @@ def test_create_message_and_reset_use_typed_shape() -> None:
     reset = client.post(f"/api/session/{session['session_id']}/reset")
     assert reset.status_code == 200
     assert reset.json()["state"] == "IDLE"
+    assert message.json()["messages"][-1]["role"] == "agent"
+    assert message.json()["messages"][-1]["text"] == message.json()["agent_message"]
 
 
 def test_unknown_session_and_invalid_message_are_safe() -> None:
