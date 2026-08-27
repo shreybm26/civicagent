@@ -1,10 +1,13 @@
 import { FormEvent, useState } from "react";
 import type { TrackingView } from "../../lib/types";
 import { CivicApiError, api } from "../../lib/api";
+import { CredentialRow } from "../receipt/CredentialRow";
+import { EmailAckForm } from "../receipt/EmailAckForm";
 
 export function TrackPage({ hindi, initialSrId = "" }: { hindi: boolean; initialSrId?: string }) {
   const [srId, setSrId] = useState(initialSrId);
   const [accessKey, setAccessKey] = useState("");
+  const [verifiedKey, setVerifiedKey] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [record, setRecord] = useState<TrackingView | null>(null);
@@ -14,8 +17,11 @@ export function TrackPage({ hindi, initialSrId = "" }: { hindi: boolean; initial
     setBusy(true);
     setError("");
     setRecord(null);
+    setVerifiedKey("");
     try {
-      setRecord(await api.track(srId, accessKey));
+      const tracked = await api.track(srId, accessKey);
+      setRecord(tracked);
+      setVerifiedKey(accessKey.trim().toUpperCase().replace(/\s+/g, ""));
     } catch (caught) {
       if (caught instanceof CivicApiError) {
         setError(caught.message);
@@ -79,16 +85,34 @@ export function TrackPage({ hindi, initialSrId = "" }: { hindi: boolean; initial
           </button>
         </form>
       </section>
-      {record && <TrackingResult record={record} hindi={hindi} />}
+      {record && <TrackingResult record={record} accessKey={verifiedKey} hindi={hindi} />}
     </>
   );
 }
 
-function TrackingResult({ record, hindi }: { record: TrackingView; hindi: boolean }) {
+function TrackingResult({
+  record,
+  accessKey,
+  hindi,
+}: {
+  record: TrackingView;
+  accessKey: string;
+  hindi: boolean;
+}) {
+  const nearby = record.nearby ?? [];
+  const typeCounts = record.type_counts ?? [];
+  const timeline = record.timeline ?? [];
+  const maxCount = Math.max(1, ...typeCounts.map((item) => item.count));
+
   return (
     <section className="receipt">
       <div className="ack-banner">{hindi ? "स्थिति" : "Status"}</div>
-      <h2>{record.sr_id}</h2>
+      <h2>{hindi ? "ट्रैकिंग विवरण" : "Tracking details"}</h2>
+      <CredentialRow
+        label={hindi ? "सेवा अनुरोध क्रमांक" : "Service request ID"}
+        value={record.sr_id}
+        copyLabel={hindi ? "कॉपी" : "Copy"}
+      />
       <dl>
         <dt>{hindi ? "वर्तमान स्थिति" : "Current status"}</dt>
         <dd>{record.status}</dd>
@@ -103,16 +127,59 @@ function TrackingResult({ record, hindi }: { record: TrackingView; hindi: boolea
           </>
         )}
       </dl>
-      <ol className="track-timeline">
-        <li className="done">
-          <strong>{hindi ? "प्राप्त" : "Received"}</strong>
-          <span>{hindi ? "डेमो नागरिक प्रकोष्ठ में दर्ज।" : "Logged with the demonstration civic cell."}</span>
-        </li>
-        <li>
-          <strong>{hindi ? "विभागीय समीक्षा" : "Department review"}</strong>
-          <span>{hindi ? "लाइव विभाग से नहीं जोड़ा गया।" : "Not connected to a live department in this prototype."}</span>
-        </li>
-      </ol>
+      {timeline.length > 0 && (
+        <ol className="track-timeline">
+          {timeline.map((step) => (
+            <li key={step.id} className={step.done ? "done" : "pending"}>
+              <strong>{timelineTitle(step.id, step.title, hindi)}</strong>
+              <span>{timelineDetail(step.id, step.detail, hindi)}</span>
+              {step.at && <em>{new Date(step.at).toLocaleString("en-IN")}</em>}
+            </li>
+          ))}
+        </ol>
+      )}
+      {typeCounts.length > 0 && (
+        <div className="neighbourhood">
+          <h3>{hindi ? "आस-पास की शिकायतें" : "Nearby reports"}</h3>
+          <p className="neighbourhood-note">
+            {hindi
+              ? "डेमो आस-पड़ोस चित्र। गिनती में सिंथेटिक नमूने और इस डेमो में दर्ज अन्य टिकट शामिल हैं। यह लाइव नगरपालिका डेटा नहीं है।"
+              : record.neighbourhood_note ||
+                "Demonstration neighbourhood picture. Counts mix synthetic nearby samples with other tickets filed in this demo. Not live municipal data."}
+          </p>
+          <ul className="type-bars">
+            {typeCounts.map((item) => (
+              <li key={item.service_id}>
+                <span>{item.label}</span>
+                <div className="type-bar-track" aria-hidden="true">
+                  <div className="type-bar-fill" style={{ width: `${Math.round((item.count / maxCount) * 100)}%` }} />
+                </div>
+                <strong>{item.count}</strong>
+              </li>
+            ))}
+          </ul>
+          {nearby.length > 0 && (
+            <ul className="nearby-list">
+              {nearby.map((item, index) => (
+                <li key={`${item.service_id}-${item.source}-${index}`}>
+                  <strong>{item.label}</strong>
+                  <span>
+                    {item.distance_km.toFixed(2)} km · {item.status} ·{" "}
+                    {item.source === "filed"
+                      ? hindi
+                        ? "इस डेमो में दर्ज"
+                        : "filed in this demo"
+                      : hindi
+                        ? "सिंथेटिक नमूना"
+                        : "demonstration sample"}
+                    {item.count > 1 ? ` ×${item.count}` : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
       {record.fields.length > 0 && (
         <table className="form-table">
           <thead>
@@ -131,6 +198,7 @@ function TrackingResult({ record, hindi }: { record: TrackingView; hindi: boolea
           </tbody>
         </table>
       )}
+      {accessKey && <EmailAckForm srId={record.sr_id} accessKey={accessKey} hindi={hindi} />}
       <p className="disclaimer">
         {hindi
           ? "डेमो ट्रैकिंग। किसी सरकारी विभाग को यह आवेदन नहीं भेजा गया।"
@@ -138,6 +206,22 @@ function TrackingResult({ record, hindi }: { record: TrackingView; hindi: boolea
       </p>
     </section>
   );
+}
+
+function timelineTitle(id: string, fallback: string, hindi: boolean): string {
+  if (!hindi) return fallback;
+  if (id === "received") return "प्राप्त";
+  if (id === "logged") return "डेमो नागरिक प्रकोष्ठ में दर्ज";
+  if (id === "ward") return "वार्ड आवंटन की प्रतीक्षा";
+  return fallback;
+}
+
+function timelineDetail(id: string, fallback: string, hindi: boolean): string {
+  if (!hindi) return fallback;
+  if (id === "received") return "इस प्रदर्शन नागरिक प्रकोष्ठ के लिए पावती बनाई गई।";
+  if (id === "logged") return "दर्ज विवरण ट्रैकिंग के लिए संग्रहीत हैं। किसी लाइव विभाग को सूचना नहीं गई।";
+  if (id === "ward") return "प्रोटोटाइप में यह चरण लंबित रहता है। उत्पादन में यहाँ ULB API होता।";
+  return fallback;
 }
 
 function formatValue(value: unknown): string {

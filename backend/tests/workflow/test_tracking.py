@@ -104,6 +104,13 @@ def test_track_api_round_trip_uses_isolated_sqlite(tmp_path: Path) -> None:
     body = tracked.json()
     assert body["department"]
     assert any(field["id"] == "location" for field in body["fields"])
+    assert "access_key" not in body
+    assert "key_hash" not in body
+    assert [step["id"] for step in body["timeline"]] == ["received", "logged", "ward"]
+    assert body["timeline"][0]["done"] is True
+    assert body["timeline"][2]["done"] is False
+    assert any(item["source"] == "demonstration" for item in body["nearby"])
+    assert any(item["count"] >= 1 for item in body["type_counts"])
 
 
 def test_supabase_store_uses_service_role_and_never_returns_key() -> None:
@@ -132,3 +139,145 @@ def test_generated_access_key_has_readable_groups() -> None:
     parts = key.split("-")
     assert len(parts) == 3
     assert all(len(part) == 4 for part in parts)
+
+
+def _settings(tmp_path: Path, **overrides: object) -> Settings:
+    values = {
+        "grievance_database_path": tmp_path / "grievances.db",
+        "media_database_path": tmp_path / "media.db",
+        "supabase_url": "",
+        "supabase_service_role_key": "",
+        "tracking_pepper": PEPPER,
+        "resend_api_key": "",
+        "public_base_url": "https://civicagent.example",
+    }
+    values.update(overrides)
+    return Settings(**values)
+
+
+def _lodge_pothole(client: TestClient) -> dict:
+    session_id = client.post("/api/session").json()["session_id"]
+    client.post(
+        f"/api/session/{session_id}/message",
+        json={"message": "There is a huge pothole and a bike almost fell"},
+    )
+    client.post(f"/api/session/{session_id}/location/resolve", json={"text": "near JNTU metro"})
+    client.post(f"/api/session/{session_id}/media/decision", json={"has_image": False})
+    client.patch(
+        f"/api/session/{session_id}/fields/description",
+        json={"value": "Large pothole near JNTU Metro"},
+    )
+    client.patch(f"/api/session/{session_id}/fields/severity", json={"value": "high"})
+    completed = client.post(f"/api/session/{session_id}/confirm", json={"confirmed": True})
+    receipt = completed.json()["receipt"]
+    assert receipt["access_key"]
+    return receipt
+
+
+def test_track_email_requires_key_and_explicit_confirm(tmp_path: Path) -> None:
+    client = TestClient(create_app(_settings(tmp_path)))
+    receipt = _lodge_pothole(client)
+    payload = {
+        "sr_id": receipt["reference"],
+        "access_key": receipt["access_key"],
+        "email": "judge@example.com",
+        "confirm_send": False,
+    }
+    denied_confirm = client.post("/api/track/email", json=payload)
+    assert denied_confirm.status_code == 422
+    assert "Confirm the email" in denied_confirm.json()["detail"]["message"]
+
+    denied_key = client.post(
+        "/api/track/email",
+        json={**payload, "access_key": "NOPE-NOPE-NOPE", "confirm_send": True},
+    )
+    assert denied_key.status_code == 401
+    assert "access_key" not in denied_key.json()["detail"]
+
+    unconfigured = client.post("/api/track/email", json={**payload, "confirm_send": True})
+    assert unconfigured.status_code == 503
+    assert unconfigured.json()["detail"]["code"] == "EMAIL_FAILED"
+
+
+def test_track_email_sends_via_resend_when_confirmed(tmp_path: Path) -> None:
+    client = TestClient(create_app(_settings(tmp_path, resend_api_key="re_test_key")))
+    receipt = _lodge_pothole(client)
+    response_mock = Mock(status_code=200)
+    response_mock.json.return_value = {"id": "msg_demo"}
+    with patch("app.mailer.httpx.post", return_value=response_mock) as posted:
+        sent = client.post(
+            "/api/track/email",
+            json={
+                "sr_id": receipt["reference"],
+                "access_key": receipt["access_key"],
+                "email": "Judge.Demo@example.com",
+                "confirm_send": True,
+            },
+        )
+    assert sent.status_code == 200
+    assert sent.json() == {"sent": True, "to": "judge.demo@example.com"}
+    body = posted.call_args.kwargs["json"]
+    assert body["to"] == ["judge.demo@example.com"]
+    assert receipt["reference"] in body["text"]
+    assert receipt["access_key"] in body["text"]
+    assert "https://civicagent.example/track" in body["text"]
+    assert "not an official government email" in body["text"].lower()
+    assert posted.call_args.kwargs["headers"]["Authorization"] == "Bearer re_test_key"
+
+
+def test_track_email_explains_resend_test_sender_limit(tmp_path: Path) -> None:
+    client = TestClient(create_app(_settings(tmp_path, resend_api_key="re_test_key")))
+    receipt = _lodge_pothole(client)
+    response_mock = Mock(status_code=403)
+    response_mock.json.return_value = {
+        "statusCode": 403,
+        "message": "You can only send testing emails to your own email address.",
+    }
+    with patch("app.mailer.httpx.post", return_value=response_mock):
+        denied = client.post(
+            "/api/track/email",
+            json={
+                "sr_id": receipt["reference"],
+                "access_key": receipt["access_key"],
+                "email": "judge@example.com",
+                "confirm_send": True,
+            },
+        )
+    assert denied.status_code == 422
+    assert "account owner's inbox" in denied.json()["detail"]["message"]
+    assert "gmail.com" not in denied.text.lower()
+
+
+def test_sqlite_list_recent_returns_newest_first(tmp_path: Path) -> None:
+    store = SqliteGrievanceStore(tmp_path / "grievances.db")
+    schema = mock_service_schemas()["road_issue"]
+    first = persist_submission(
+        store,
+        state=_state_with_fields(),
+        service_id=schema.service_id,
+        department=schema.department,
+        receipt=Receipt(
+            reference="CIV-OLD",
+            status="Received",
+            department=schema.department,
+            timestamp=datetime(2026, 8, 1, 10, 0, tzinfo=timezone.utc),
+        ),
+        pepper=PEPPER,
+    )
+    second = persist_submission(
+        store,
+        state=_state_with_fields(),
+        service_id=schema.service_id,
+        department=schema.department,
+        receipt=Receipt(
+            reference="CIV-NEW",
+            status="Received",
+            department=schema.department,
+            timestamp=datetime(2026, 8, 2, 10, 0, tzinfo=timezone.utc),
+        ),
+        pepper=PEPPER,
+    )
+    recent = store.list_recent()
+    assert [row.sr_id for row in recent] == ["CIV-NEW", "CIV-OLD"]
+    assert first and second
+    assert all(row.key_hash != first for row in recent)

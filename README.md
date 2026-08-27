@@ -63,6 +63,26 @@ If those three variables are missing, the API falls back to SQLite inside the co
 
 The access key is shown **once** on the receipt. Only a SHA-256 HMAC of it is stored (`key_hash`). The chat transcript and photo bytes are not written to this table.
 
+The track page also shows a **demonstration neighbourhood picture**: counts by issue type, synthetic nearby samples labelled as demo (not live ULB data), plus other tickets filed in this prototype within about 2 km. The timeline stops at “awaiting ward assignment” on purpose.
+
+## Email the acknowledgement (Resend)
+
+After submit, citizens can email themselves the service request ID, access key, and tracking link. The API will not send until they tick confirm — a typo would leak the key. This is demonstration mail, not a department notice.
+
+1. Create a [Resend](https://resend.com) account and copy an API key.
+2. For anyone other than the Resend account owner, verify a domain and send from that address. `onboarding@resend.dev` only delivers to the account owner.
+3. In Railway → Variables, add:
+
+   | Name | Value |
+   | --- | --- |
+   | `RESEND_API_KEY` | `re_…` from Resend |
+   | `RESEND_FROM` | `CivicAgent Demo <onboarding@resend.dev>` (test sender; only the Resend account owner receives mail until you verify a domain) |
+   | `PUBLIC_BASE_URL` | your Railway `https://…` URL (optional if the request host is already that URL) |
+
+4. Confirm `/health` includes `"mail_configured": true`. Lodge a grievance, tick the confirm checkbox, and send a test to your inbox.
+
+Without `RESEND_API_KEY`, tracking still works; send returns a clear “not configured” error.
+
 ## Deploy (public URL)
 
 Use **one Railway service** for both the React UI and FastAPI API. That is the right fit for this prototype:
@@ -86,6 +106,9 @@ Do not put the API on Vercel. Vercel functions are stateless; creating a session
    | `SUPABASE_URL` | your Supabase project URL (see **Track a grievance** above) |
    | `SUPABASE_SERVICE_ROLE_KEY` | Supabase `service_role` secret (backend only) |
    | `TRACKING_PEPPER` | random string used to hash access keys |
+   | `RESEND_API_KEY` | Resend API key (optional; needed to email acknowledgements) |
+   | `RESEND_FROM` | `CivicAgent Demo <onboarding@resend.dev>` |
+   | `PUBLIC_BASE_URL` | public `https://…` URL for links in the email (optional) |
 
    Leave `VITE_API_URL` unset. Do not add `GEMINI_API_KEY` for the contest demo. Never add `SUPABASE_SERVICE_ROLE_KEY` to the frontend.
 5. Open the service Settings and generate a public domain. Keep replicas at **1**.

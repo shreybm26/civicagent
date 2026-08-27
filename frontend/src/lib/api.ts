@@ -1,4 +1,4 @@
-import type { SessionView, TrackingView } from "./types";
+import type { EmailSentView, SessionView, TrackingView } from "./types";
 
 export type CivicApi = {
   createSession(): Promise<SessionView>;
@@ -11,6 +11,7 @@ export type CivicApi = {
   confirm(id: string): Promise<SessionView>;
   reset(id: string): Promise<SessionView>;
   track(srId: string, accessKey: string): Promise<TrackingView>;
+  sendTrackEmail(srId: string, accessKey: string, email: string, confirmSend: boolean): Promise<EmailSentView>;
 };
 
 export class CivicApiError extends Error {
@@ -99,6 +100,17 @@ export const api: CivicApi = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sr_id: srId, access_key: accessKey }),
+    }),
+  sendTrackEmail: (srId, accessKey, email, confirmSend) =>
+    callJson<EmailSentView>("/api/track/email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sr_id: srId,
+        access_key: accessKey,
+        email,
+        confirm_send: confirmSend,
+      }),
     }),
 };
 

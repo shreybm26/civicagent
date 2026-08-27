@@ -6,18 +6,34 @@ import logging
 from pathlib import PurePath
 from uuid import UUID
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import Response
 
 from .config import Settings
-from .contracts import CivicError, ConfirmIn, FieldEditIn, LocationIn, LocationResult, MediaDecisionIn, Message, MessageIn, SessionView, TrackIn, TrackingView
+from .contracts import (
+    CivicError,
+    ConfirmIn,
+    EmailSentView,
+    FieldEditIn,
+    LocationIn,
+    LocationResult,
+    MediaDecisionIn,
+    Message,
+    MessageIn,
+    SessionView,
+    TrackEmailIn,
+    TrackIn,
+    TrackingView,
+)
 from .grievance_store import (
     GrievanceStore,
     GrievanceStoreError,
+    StoredGrievance,
     access_key_matches,
-    tracking_view_from_record,
 )
+from .mailer import MailError, normalize_email, send_acknowledgement
 from .media_store import MediaNotFound, MediaStore
+from .neighbourhood import assemble_tracking_view
 from .provider_stub import ConversationProvider
 from .store import SessionNotFound, SessionStore
 from .workflow.graph import WorkflowGraph
@@ -53,6 +69,7 @@ def build_api_router(
             "gemini_model": settings.gemini_model if settings.gemini_api_key else None,
             "gemini_timeout_seconds": settings.gemini_timeout_seconds,
             "tracking_store": grievance_store.backend_name,
+            "mail_configured": bool(settings.resend_api_key),
         }
 
     @router.post("/api/session", response_model=SessionView, status_code=status.HTTP_200_OK)
@@ -165,25 +182,79 @@ def build_api_router(
 
     @router.post("/api/track", response_model=TrackingView)
     def track_grievance(body: TrackIn) -> TrackingView:
-        try:
-            record = grievance_store.get(body.sr_id)
-        except GrievanceStoreError as exc:
+        record = _authorized_record(grievance_store, body, settings)
+        return _enriched_tracking_view(grievance_store, record)
+
+    @router.post("/api/track/email", response_model=EmailSentView)
+    def email_grievance(request: Request, body: TrackEmailIn) -> EmailSentView:
+        if not body.confirm_send:
             raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=_error("TRACK_UNAVAILABLE", str(exc), True),
-            ) from exc
-        if record is None or not access_key_matches(body.access_key, record.key_hash, settings.tracking_pepper):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=_error(
-                    "TRACK_NOT_FOUND",
-                    "Service request not found or access key is incorrect.",
+                    "EMAIL_NOT_CONFIRMED",
+                    "Confirm the email address before sending. A typo would send the access key to the wrong inbox.",
                     False,
                 ),
             )
-        return tracking_view_from_record(record)
+        record = _authorized_record(grievance_store, body, settings)
+        view = _enriched_tracking_view(grievance_store, record)
+        try:
+            to_email = normalize_email(body.email)
+            send_acknowledgement(
+                api_key=settings.resend_api_key,
+                from_address=settings.resend_from,
+                to_email=to_email,
+                view=view,
+                access_key=body.access_key,
+                track_url=_public_track_url(request, settings),
+            )
+        except MailError as exc:
+            message = str(exc)
+            retryable = "temporarily" in message.lower() or "not configured" in message.lower()
+            raise HTTPException(
+                status_code=(
+                    status.HTTP_503_SERVICE_UNAVAILABLE
+                    if retryable
+                    else status.HTTP_422_UNPROCESSABLE_ENTITY
+                ),
+                detail=_error("EMAIL_FAILED", message, retryable),
+            ) from exc
+        return EmailSentView(sent=True, to=to_email)
 
     return router
+
+
+def _authorized_record(grievance_store: GrievanceStore, body: TrackIn, settings: Settings) -> StoredGrievance:
+    try:
+        record = grievance_store.get(body.sr_id)
+    except GrievanceStoreError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=_error("TRACK_UNAVAILABLE", str(exc), True),
+        ) from exc
+    if record is None or not access_key_matches(body.access_key, record.key_hash, settings.tracking_pepper):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=_error(
+                "TRACK_NOT_FOUND",
+                "Service request not found or access key is incorrect.",
+                False,
+            ),
+        )
+    return record
+
+
+def _enriched_tracking_view(grievance_store: GrievanceStore, record: StoredGrievance) -> TrackingView:
+    try:
+        others = grievance_store.list_recent()
+    except GrievanceStoreError:
+        others = []
+    return assemble_tracking_view(record, others)
+
+
+def _public_track_url(request: Request, settings: Settings) -> str:
+    base = settings.public_base_url or str(request.base_url).rstrip("/")
+    return f"{base}/track"
 
 
 def _persist_result(store: SessionStore, graph: WorkflowGraph, result) -> SessionView:

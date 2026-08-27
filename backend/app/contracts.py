@@ -264,6 +264,29 @@ class TrackingField(ContractModel):
     value: Any = None
 
 
+class TimelineStep(ContractModel):
+    id: str
+    title: str
+    detail: str
+    at: datetime | None = None
+    done: bool = False
+
+
+class NearbyReport(ContractModel):
+    service_id: str
+    label: str
+    distance_km: float
+    status: str
+    source: Literal["filed", "demonstration"]
+    count: int = 1
+
+
+class TypeCount(ContractModel):
+    service_id: str
+    label: str
+    count: int
+
+
 class TrackingView(ContractModel):
     sr_id: str
     status: str
@@ -272,6 +295,27 @@ class TrackingView(ContractModel):
     submitted_at: datetime
     location: str | None = None
     fields: list[TrackingField] = Field(default_factory=list)
+    timeline: list[TimelineStep] = Field(default_factory=list)
+    nearby: list[NearbyReport] = Field(default_factory=list)
+    type_counts: list[TypeCount] = Field(default_factory=list)
+    neighbourhood_note: str = (
+        "Demonstration neighbourhood picture. Counts mix synthetic nearby samples with other tickets filed in this demo. Not live municipal data."
+    )
+
+
+class TrackEmailIn(TrackIn):
+    email: str = Field(min_length=5, max_length=254)
+    confirm_send: bool = False
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email_field(cls, value: str) -> str:
+        return value.strip()
+
+
+class EmailSentView(ContractModel):
+    sent: bool
+    to: str
 
 
 def idle_session(session_id: UUID) -> SessionState:

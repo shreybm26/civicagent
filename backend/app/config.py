@@ -75,6 +75,9 @@ class Settings:
     supabase_url: str = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
     supabase_service_role_key: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
     tracking_pepper: str = os.getenv("TRACKING_PEPPER", "civicagent-demo-tracking").strip() or "civicagent-demo-tracking"
+    resend_api_key: str = os.getenv("RESEND_API_KEY", "").strip()
+    resend_from: str = os.getenv("RESEND_FROM", "CivicAgent Demo <onboarding@resend.dev>").strip()
+    public_base_url: str = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
     image_confidence_threshold: float = _float_env("IMAGE_CONFIDENCE_THRESHOLD", 0.7)
     schema_count: int = 5
 

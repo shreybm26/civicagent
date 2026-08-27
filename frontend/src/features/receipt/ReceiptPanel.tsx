@@ -1,5 +1,6 @@
 import type { Receipt } from "../../lib/types";
-import { useState } from "react";
+import { CredentialRow } from "./CredentialRow";
+import { EmailAckForm } from "./EmailAckForm";
 
 export function ReceiptPanel({
   receipt,
@@ -16,13 +17,13 @@ export function ReceiptPanel({
     <section className="receipt">
       <div className="ack-banner">{hindi ? "पावती" : "Acknowledgement"}</div>
       <h2>{hindi ? "शिकायत दर्ज हो गई है" : "Grievance registered"}</h2>
-      <Credential
+      <CredentialRow
         label={hindi ? "सेवा अनुरोध क्रमांक" : "Service request ID"}
         value={receipt.reference}
         copyLabel={hindi ? "कॉपी" : "Copy"}
       />
       {receipt.access_key && (
-        <Credential
+        <CredentialRow
           label={hindi ? "प्रवेश कुंजी" : "Access key"}
           value={receipt.access_key}
           copyLabel={hindi ? "कॉपी" : "Copy"}
@@ -41,6 +42,9 @@ export function ReceiptPanel({
         <dt>{hindi ? "समय" : "Time"}</dt>
         <dd>{new Date(receipt.timestamp).toLocaleString("en-IN")}</dd>
       </dl>
+      {receipt.access_key && (
+        <EmailAckForm srId={receipt.reference} accessKey={receipt.access_key} hindi={hindi} />
+      )}
       <p className="disclaimer">
         {hindi
           ? "डेमो रसीद। किसी सरकारी विभाग को यह आवेदन नहीं भेजा गया। आवेदन ट्रैक करने के लिए ऊपर दी गई कुंजी का उपयोग करें।"
@@ -55,45 +59,5 @@ export function ReceiptPanel({
         </button>
       </div>
     </section>
-  );
-}
-
-function Credential({
-  label,
-  value,
-  copyLabel,
-  warn,
-}: {
-  label: string;
-  value: string;
-  copyLabel: string;
-  warn?: string;
-}) {
-  const [copied, setCopied] = useState(false);
-
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(value);
-    } catch {
-      const field = document.createElement("textarea");
-      field.value = value;
-      document.body.appendChild(field);
-      field.select();
-      document.execCommand("copy");
-      field.remove();
-    }
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1600);
-  }
-
-  return (
-    <div className="credential">
-      <p className="credential-label">{label}</p>
-      <p className="reference">{value}</p>
-      <button type="button" onClick={() => void copy()}>
-        {copied ? "Copied" : copyLabel}
-      </button>
-      {warn && <small>{warn}</small>}
-    </div>
   );
 }

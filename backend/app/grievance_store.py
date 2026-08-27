@@ -50,6 +50,8 @@ class GrievanceStore(Protocol):
 
     def get(self, sr_id: str) -> StoredGrievance | None: ...
 
+    def list_recent(self, limit: int = 200) -> list[StoredGrievance]: ...
+
 
 def generate_access_key() -> str:
     """Readable 12-character key, grouped for the receipt screen."""
@@ -155,6 +157,12 @@ class MemoryGrievanceStore:
         with self._lock:
             return self._rows.get(normalize_sr_id(sr_id))
 
+    def list_recent(self, limit: int = 200) -> list[StoredGrievance]:
+        with self._lock:
+            rows = list(self._rows.values())
+        rows.sort(key=lambda row: row.created_at, reverse=True)
+        return rows[:limit]
+
 
 class SqliteGrievanceStore:
     backend_name = "sqlite"
@@ -226,6 +234,25 @@ class SqliteGrievanceStore:
             created_at=row["created_at"],
         )
 
+    def list_recent(self, limit: int = 200) -> list[StoredGrievance]:
+        with self._lock, self._connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM grievances ORDER BY created_at DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [
+            _row_to_record(
+                sr_id=row["sr_id"],
+                key_hash=row["key_hash"],
+                service_id=row["service_id"],
+                department=row["department"],
+                status=row["status"],
+                payload=json.loads(row["payload_json"]),
+                created_at=row["created_at"],
+            )
+            for row in rows
+        ]
+
 
 class SupabaseGrievanceStore:
     """PostgREST client using the service role. Never expose that key to the browser."""
@@ -287,6 +314,31 @@ class SupabaseGrievanceStore:
             payload=row.get("payload") or {},
             created_at=row["created_at"],
         )
+
+    def list_recent(self, limit: int = 200) -> list[StoredGrievance]:
+        try:
+            response = httpx.get(
+                f"{self._url}/rest/v1/grievances",
+                headers=self._headers,
+                params={"select": "*", "order": "created_at.desc", "limit": str(limit)},
+                timeout=self._timeout,
+            )
+        except httpx.HTTPError as exc:
+            raise GrievanceStoreError("The tracking service is temporarily unavailable.") from exc
+        if response.status_code >= 400:
+            raise GrievanceStoreError("The tracking service is temporarily unavailable.")
+        return [
+            _row_to_record(
+                sr_id=row["sr_id"],
+                key_hash=row["key_hash"],
+                service_id=row["service_id"],
+                department=row["department"],
+                status=row["status"],
+                payload=row.get("payload") or {},
+                created_at=row["created_at"],
+            )
+            for row in response.json()
+        ]
 
 
 def _row_to_record(

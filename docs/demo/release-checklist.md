@@ -24,7 +24,9 @@ Open the frontend with `cd frontend; npm install; npm run dev`, then reset befor
 
 - `/health` returns `status=ok`, `provider=mock`, `schemas=5`, and `tracking_store` of `sqlite` or `supabase`.
 - Pothole path reaches `COMPLETED` only after explicit confirmation and a receipt that includes a service request ID plus a one-time access key.
-- `POST /api/track` with that ID and key returns the filed status; a wrong key returns `401` and does not leak which value was wrong.
+- Copy sits to the right of the service request ID and access key on the receipt. Email send requires an explicit confirm checkbox.
+- `POST /api/track` with that ID and key returns the filed status, a demo timeline, and nearby type counts; a wrong key returns `401` and does not leak which value was wrong.
+- `POST /api/track/email` without `confirm_send` returns `422`; a wrong key returns `401`.
 - Track application in the nav opens `/track` without needing the live chat session.
 - Selfie upload is rejected without dead-ending the report.
 - Prompt injection remains `IDLE` and cannot submit.
