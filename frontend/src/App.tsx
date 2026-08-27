@@ -111,10 +111,15 @@ export default function App() {
     contextualStep = <ReviewCard
       fields={session.fields}
       department={session.service?.department}
-      onEdit={(id, value) => api.editField(session.session_id, id, value).then(setSession).catch(() => setError("That correction could not be saved."))}
+      onEdit={async (id, value) => {
+        setError("");
+        try { setSession(await api.editField(session.session_id, id, value)); }
+        catch (caught) { setError(caught instanceof Error ? caught.message : "That correction could not be saved."); throw caught; }
+      }}
       onSubmit={() => run(() => api.confirm(session.session_id), "Submission failed. Please review and retry.")}
       busy={busy}
       hindi={hindi}
+      photoAdded={session.image_decision === "added"}
     />;
   }
 

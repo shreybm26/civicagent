@@ -232,13 +232,14 @@ class WorkflowGraph:
         field = schema.field(field_id)
         if field is None:
             raise WorkflowError(f"Unknown field: {field_id}")
-        if not field_value_is_valid(field, value):
+        empty_optional = not field.required and (value is None or (isinstance(value, str) and not value.strip()))
+        if not empty_optional and not field_value_is_valid(field, value):
             raise WorkflowError(f"Invalid value for field: {field_id}")
 
         next_state = state.model_copy(deep=True)
         if next_state.state == "REVIEWING":
             next_state.state = transition(next_state.state, "citizen_edits")
-        self._set_field(next_state, field_id, value, source="correction", confidence=1.0, status="accepted")
+        self._set_field(next_state, field_id, None if empty_optional else value, source=None if empty_optional else "correction", confidence=None if empty_optional else 1.0, status="missing" if empty_optional else "accepted")
         if field_id == "location" and isinstance(value, str):
             location = resolve_location(value)
             if location.address:
