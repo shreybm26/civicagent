@@ -2,8 +2,8 @@ import type { Message, SessionView } from "./types";
 
 const welcome: Message = {
   role: "agent",
-  text: "Namaste. Please describe the civic issue you want to report. I will collect the required details and show you a review form before anything is submitted.",
-  timestamp: new Date().toISOString(),
+  text: "Namaste, I am Civic Sevak. What issue would you like to report?",
+  timestamp: "1970-01-01T00:00:00.000Z",
 };
 
 export function conversation(session: SessionView | null): Message[] {
@@ -14,18 +14,18 @@ export function conversation(session: SessionView | null): Message[] {
     messages.push({
       role: "agent",
       text: session.agent_message,
-      timestamp: new Date().toISOString(),
+      timestamp: `${session.session_id}-agent-overlay`,
     });
   }
   return messages;
 }
 
 export const SUGGESTIONS = [
-  { label: "Pothole", hi: "गड्ढा", text: "There is a pothole near JNTU Metro", textHi: "जेएनटीयू मेट्रो के पास गड्ढा है" },
-  { label: "Garbage", hi: "कचरा", text: "Garbage has not been collected near Hitech City Metro", textHi: "हाइटेक सिटी मेट्रो के पास कचरा नहीं उठाया गया" },
-  { label: "Streetlight", hi: "स्ट्रीटलाइट", text: "The streetlight outside Ameerpet Metro has been off for a week", textHi: "अमीरपेट मेट्रो के बाहर स्ट्रीटलाइट एक हफ्ते से बंद है" },
-  { label: "Water leak", hi: "पानी रिसाव", text: "There is a water leak near Charminar", textHi: "चारमीनार के पास पानी का रिसाव है" },
-  { label: "Sanitation", hi: "स्वच्छता", text: "There is a sanitation issue near Secunderabad Railway Station", textHi: "सिकंदराबाद रेलवे स्टेशन के पास स्वच्छता की समस्या है" },
+  { label: "Pothole", hi: "गड्ढा", text: "There is a pothole on my street", textHi: "मेरी सड़क पर गड्ढा है" },
+  { label: "Garbage", hi: "कचरा", text: "Garbage has not been collected in my area", textHi: "मेरे इलाके में कचरा नहीं उठाया गया" },
+  { label: "Streetlight", hi: "स्ट्रीटलाइट", text: "The streetlight outside my house has been off for a week", textHi: "मेरे घर के बाहर स्ट्रीटलाइट एक हफ्ते से बंद है" },
+  { label: "Water leak", hi: "पानी रिसाव", text: "There is a water leak near my building", textHi: "मेरी इमारत के पास पानी का रिसाव है" },
+  { label: "Sanitation", hi: "स्वच्छता", text: "There is a sanitation issue in my neighbourhood", textHi: "मेरे मोहल्ले में स्वच्छता की समस्या है" },
 ];
 
 export const STATE_LABEL: Record<string, { en: string; hi: string }> = {

@@ -238,22 +238,40 @@ def _confidence(value: Any) -> float:
 
 
 def build_workflow_ports(settings: Settings):
-    """Return schemas and ports. Gemini is used only when explicitly enabled."""
+    """Return schemas and ports. Gemini is used only when explicitly enabled.
+
+    OpenRouter, when configured, replaces only the image analyzer; router and
+    collector remain Gemini-backed (or deterministic mock).
+    """
 
     from .integration_adapters import RegistrySchemaAdapter
+    from .provider_openrouter import OpenRouterClient
 
     schemas = RegistrySchemaAdapter(SchemaRegistry()).as_graph_schemas()
     router = SchemaRouterAdapter(schemas)
     collector = SchemaCollectorAdapter()
     image = ImageAnalyzerAdapter()
-    enabled = settings.provider_mode in {"gemini", "llm", "auto"} and bool(settings.gemini_api_key)
-    if enabled:
-        client = GeminiClient(
+    gemini_enabled = settings.provider_mode in {"gemini", "llm", "auto"} and bool(settings.gemini_api_key)
+    gemini_client: GeminiClient | None = None
+    if gemini_enabled:
+        gemini_client = GeminiClient(
             settings.gemini_api_key,
             settings.gemini_model,
             timeout=settings.gemini_timeout_seconds,
         )
-        router = GeminiBackedRouter(client, router)
-        collector = GeminiBackedCollector(client, collector)
-        image = GeminiImageAnalyzer(client, image, settings.image_confidence_threshold)
+        router = GeminiBackedRouter(gemini_client, router)
+        collector = GeminiBackedCollector(gemini_client, collector)
+
+    if settings.openrouter_api_key:
+        image = GeminiImageAnalyzer(
+            OpenRouterClient(
+                settings.openrouter_api_key,
+                settings.openrouter_model,
+                timeout=settings.openrouter_timeout_seconds,
+            ),
+            image,
+            settings.image_confidence_threshold,
+        )
+    elif gemini_client is not None:
+        image = GeminiImageAnalyzer(gemini_client, image, settings.image_confidence_threshold)
     return schemas, router, collector, image

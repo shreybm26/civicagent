@@ -26,7 +26,9 @@ export function FieldPanel({
         {hindi ? "स्थिति" : "Status"}: <strong>{stateLabel}</strong>
       </p>
       {fields.length === 0 ? (
-        <p className="empty">{hindi ? "बातचीत के साथ विवरण यहाँ भरेंगे।" : "Details will appear here as the assistant collects them."}</p>
+        <p className="empty">
+          {hindi ? "बातचीत के साथ विवरण यहाँ भरेंगे।" : "Details will appear here as the assistant collects them."}
+        </p>
       ) : (
         <table className="form-table">
           <thead>

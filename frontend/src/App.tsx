@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, isExpiredSession, mediaUrl } from "./lib/api";
 import { conversation, STATE_LABEL } from "./lib/conversation";
+import { activityLabel, type AvatarState, type PendingAction } from "./lib/activity";
 import type { SessionView } from "./lib/types";
 import { ChatPanel } from "./features/chat/ChatPanel";
 import { FieldPanel } from "./features/fields/FieldPanel";
@@ -21,9 +22,13 @@ export default function App() {
   const [path, setPath] = useState(currentPath);
   const [session, setSession] = useState<SessionView | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pendingAction, setPendingAction] = useState<PendingAction>("starting");
   const [error, setError] = useState("");
   const [hindi, setHindi] = useState(false);
   const [fontStep, setFontStep] = useState(1);
+  const [avatarState, setAvatarState] = useState<AvatarState>("idle");
+  const [scrollToken, setScrollToken] = useState(0);
+  const successTimerRef = useRef<number | null>(null);
   const onTrackPage = path === "/track";
 
   function go(next: string) {
@@ -42,7 +47,19 @@ export default function App() {
   useEffect(() => {
     if (onTrackPage) return;
     if (session) return;
-    api.createSession().then(setSession).catch(() => setError("The grievance cell could not start. Please refresh."));
+    setPendingAction("starting");
+    setAvatarState("processing");
+    api
+      .createSession()
+      .then((next) => {
+        setSession(next);
+        setAvatarState("idle");
+      })
+      .catch(() => {
+        setError("The grievance cell could not start. Please refresh.");
+        setAvatarState("error");
+      })
+      .finally(() => setPendingAction(null));
   }, [onTrackPage, session]);
 
   useEffect(() => {
@@ -50,25 +67,46 @@ export default function App() {
     document.documentElement.style.fontSize = FONT_STEPS[fontStep];
   }, [hindi, fontStep]);
 
-  async function run(task: () => Promise<SessionView>, fallback: string) {
+  useEffect(
+    () => () => {
+      if (successTimerRef.current) window.clearTimeout(successTimerRef.current);
+    },
+    [],
+  );
+
+  async function run(
+    task: () => Promise<SessionView>,
+    fallback: string,
+    action: Exclude<PendingAction, "starting" | null> = "recording",
+  ) {
     setBusy(true);
+    setPendingAction(action);
+    setAvatarState("processing");
     setError("");
+    setScrollToken((value) => value + 1);
     try {
       setSession(await task());
+      setAvatarState("success");
+      if (successTimerRef.current) window.clearTimeout(successTimerRef.current);
+      successTimerRef.current = window.setTimeout(() => setAvatarState("idle"), 1200);
     } catch (caught) {
       if (isExpiredSession(caught)) {
         try {
           setSession(await api.createSession());
           setError("The previous session expired after a server restart. Send the message again.");
+          setAvatarState("error");
           return;
         } catch {
           setError("The session expired. Refresh the page.");
+          setAvatarState("error");
           return;
         }
       }
       setError(caught instanceof Error && caught.message ? caught.message : fallback);
+      setAvatarState("error");
     } finally {
       setBusy(false);
+      setPendingAction(null);
     }
   }
 
@@ -86,7 +124,7 @@ export default function App() {
         const fresh = await api.createSession();
         return api.sendMessage(fresh.session_id, value);
       }
-    }, "That message could not be recorded. Try again.");
+    }, "That message could not be recorded. Try again.", "recording");
   }
 
   if (!onTrackPage && !session) {
@@ -96,54 +134,98 @@ export default function App() {
         <Tricolor />
         <Masthead hindi={false} stateLabel="Starting" onReset={() => undefined} busy />
         <main id="main" className="page">
-          <p className="notice-banner">{error || "Opening a secure demonstration session…"}</p>
+          <p className="notice-banner">{error || activityLabel("starting", false)}</p>
         </main>
       </div>
     );
   }
 
   const messages = session ? conversation(session) : [];
-  const locationMissing = session?.fields.some((field) => field.id === "location" && (field.status === "missing" || field.value == null || field.value === "")) ?? false;
+  const locationMissing =
+    session?.fields.some(
+      (field) => field.id === "location" && (field.status === "missing" || field.value == null || field.value === ""),
+    ) ?? false;
   const showLocation = session?.state === "LOCATION_REQUIRED" || (session?.state === "COLLECTING" && locationMissing);
   const hasLocation = Boolean(session?.location?.address);
   const latestEvidence = session?.evidence?.at(-1);
   const imageHandled = session?.image_decision === "skipped" || Boolean(latestEvidence);
-  const stateLabel = session ? (hindi ? STATE_LABEL[session.state]?.hi : STATE_LABEL[session.state]?.en) : (hindi ? "ट्रैकिंग" : "Tracking");
+  const stateLabel = session
+    ? hindi
+      ? STATE_LABEL[session.state]?.hi
+      : STATE_LABEL[session.state]?.en
+    : hindi
+      ? "ट्रैकिंग"
+      : "Tracking";
+
+  const composerEnabled =
+    !!session &&
+    (session.state === "IDLE" ||
+      session.state === "IDENTIFYING" ||
+      session.state === "COLLECTING" ||
+      session.state === "LOCATION_REQUIRED");
+
   let contextualStep = null;
   if (session) {
     if (showLocation) {
-      contextualStep = <LocationConfirmation
-        onConfirm={(pick) => run(() => api.resolveLocationPin(session.session_id, pick), "Location could not be confirmed.")}
-        onResolveText={(text) => run(() => api.resolveLocation(session.session_id, text), "Location could not be verified. Try JNTU Metro or Charminar.")}
-        busy={busy}
-        hindi={hindi}
-      />;
+      contextualStep = (
+        <LocationConfirmation
+          onConfirm={(pick) =>
+            run(() => api.resolveLocationPin(session.session_id, pick), "Location could not be confirmed.", "resolving_location")
+          }
+          onResolveText={(text) =>
+            run(
+              () => api.resolveLocation(session.session_id, text),
+              "Location could not be verified. Please type a landmark or area.",
+              "resolving_location",
+            )
+          }
+          busy={busy}
+          hindi={hindi}
+        />
+      );
     } else if (hasLocation && !imageHandled) {
-      contextualStep = <EvidencePanel
-        onChoose={(hasImage) => { if (!hasImage) void run(() => api.decideImage(session.session_id, false), "Image choice could not be saved."); }}
-        onUpload={(file) => run(() => api.uploadMedia(session.session_id, file), "Photo upload failed. You can continue without a photo.")}
-        busy={busy}
-        hindi={hindi}
-      />;
+      contextualStep = (
+        <EvidencePanel
+          onChoose={(hasImage) => {
+            if (!hasImage) void run(() => api.decideImage(session.session_id, false), "Image choice could not be saved.", "saving_details");
+          }}
+          onUpload={(file) =>
+            run(() => api.uploadMedia(session.session_id, file), "Photo upload failed. You can continue without a photo.", "checking_image")
+          }
+          busy={busy}
+          hindi={hindi}
+        />
+      );
     } else if (hasLocation && imageHandled && session.state !== "REVIEWING" && session.state !== "COMPLETED") {
-      contextualStep = <>
-        {latestEvidence && <EvidencePanel onChoose={() => undefined} onUpload={() => undefined} busy={busy} evidence={latestEvidence} hindi={hindi} />}
-        <RemainingFieldsForm fields={session.fields} onSave={(id, value) => run(() => api.editField(session.session_id, id, value), "That detail could not be saved.")} busy={busy} />
-      </>;
+      contextualStep = (
+        <RemainingFieldsForm
+          fields={session.fields}
+          onSave={(id, value) => run(() => api.editField(session.session_id, id, value), "That detail could not be saved.", "saving_details")}
+          busy={busy}
+          hindi={hindi}
+        />
+      );
     } else if (session.state === "REVIEWING") {
-      contextualStep = <ReviewCard
-        fields={session.fields}
-        department={session.service?.department}
-        onEdit={async (id, value) => {
-          setError("");
-          try { setSession(await api.editField(session.session_id, id, value)); }
-          catch (caught) { setError(caught instanceof Error ? caught.message : "That correction could not be saved."); throw caught; }
-        }}
-        onSubmit={() => run(() => api.confirm(session.session_id), "Submission failed. Please review and retry.")}
-        busy={busy}
-        hindi={hindi}
-        photoAdded={session.image_decision === "added"}
-      />;
+      contextualStep = (
+        <ReviewCard
+          fields={session.fields}
+          department={session.service?.department}
+          onEdit={async (id, value) => {
+            setError("");
+            try {
+              setSession(await api.editField(session.session_id, id, value));
+            } catch (caught) {
+              setError(caught instanceof Error ? caught.message : "That correction could not be saved.");
+              setAvatarState("error");
+              throw caught;
+            }
+          }}
+          onSubmit={() => run(() => api.confirm(session.session_id), "Submission failed. Please review and retry.", "submitting")}
+          busy={busy}
+          hindi={hindi}
+          photoAdded={session.image_decision === "added"}
+        />
+      );
     }
   }
 
@@ -157,13 +239,31 @@ export default function App() {
       <Masthead
         hindi={hindi}
         stateLabel={stateLabel || session?.state || "Tracking"}
-        onReset={() => session && run(() => api.reset(session.session_id), "Reset failed.")}
+        onReset={() => session && run(() => api.reset(session.session_id), "Reset failed.", "resetting")}
         busy={busy}
         showReset={!onTrackPage}
       />
       <nav className="gov-nav" aria-label="Primary">
-        <a href="/" aria-current={onTrackPage ? undefined : "page"} onClick={(event) => { event.preventDefault(); go("/"); }}>{hindi ? "शिकायत दर्ज करें" : "Lodge grievance"}</a>
-        <a href="/track" aria-current={onTrackPage ? "page" : undefined} onClick={(event) => { event.preventDefault(); go("/track"); }}>{hindi ? "आवेदन ट्रैक करें" : "Track application"}</a>
+        <a
+          href="/"
+          aria-current={onTrackPage ? undefined : "page"}
+          onClick={(event) => {
+            event.preventDefault();
+            go("/");
+          }}
+        >
+          {hindi ? "शिकायत दर्ज करें" : "Lodge grievance"}
+        </a>
+        <a
+          href="/track"
+          aria-current={onTrackPage ? "page" : undefined}
+          onClick={(event) => {
+            event.preventDefault();
+            go("/track");
+          }}
+        >
+          {hindi ? "आवेदन ट्रैक करें" : "Track application"}
+        </a>
         <span>{hindi ? "सेवाएँ" : "Services"}</span>
         <span>{hindi ? "सहायता" : "Helpline"}</span>
       </nav>
@@ -178,12 +278,17 @@ export default function App() {
         ) : session ? (
           <>
             <p className="breadcrumb">
-              {hindi ? "मुख्य पृष्ठ" : "Home"} / {hindi ? "नागरिक सेवाएँ" : "Citizen services"} / <strong>{hindi ? "शिकायत दर्ज करें" : "Lodge grievance"}</strong>
+              {hindi ? "मुख्य पृष्ठ" : "Home"} / {hindi ? "नागरिक सेवाएँ" : "Citizen services"} /{" "}
+              <strong>{hindi ? "शिकायत दर्ज करें" : "Lodge grievance"}</strong>
             </p>
             <header className="page-title">
               <div>
                 <h1>{hindi ? "ऑनलाइन नागरिक शिकायत" : "Online civic grievance"}</h1>
-                <p>{hindi ? "सामान्य भाषा में बताएँ। सहायक आवश्यक विवरण एकत्र कर समीक्षा फॉर्म दिखाएगा।" : "Describe the issue in plain language. The assistant fills the statutory fields and asks you to confirm before acknowledgement."}</p>
+                <p>
+                  {hindi
+                    ? "सामान्य भाषा में बताएँ। सिविक सेवक आवश्यक विवरण एकत्र कर बातचीत में समीक्षा दिखाएगा।"
+                    : "Describe the issue in plain language. Civic Sevak collects the required details and asks you to review in the chat before acknowledgement."}
+                </p>
               </div>
               <dl className="app-meta">
                 <div>
@@ -196,9 +301,13 @@ export default function App() {
                 </div>
               </dl>
             </header>
-            {error && <p className="error" role="alert">{error}</p>}
+            {error && (
+              <p className="error" role="alert">
+                {error}
+              </p>
+            )}
             <div className="workspace">
-              <div>
+              <div className="workspace-chat">
                 <ChatPanel
                   messages={messages}
                   onSend={send}
@@ -206,26 +315,36 @@ export default function App() {
                   hindi={hindi}
                   showSuggestions={session.state === "IDLE"}
                   contextualStep={contextualStep}
-                  composerEnabled={!session.service_id}
+                  composerEnabled={composerEnabled}
                   mediaUrl={(mediaId) => mediaUrl(session.session_id, mediaId)}
+                  pendingAction={pendingAction}
+                  avatarState={avatarState}
+                  scrollToken={scrollToken}
                 />
                 {session.state === "COMPLETED" && session.receipt && (
                   <ReceiptPanel
                     receipt={session.receipt}
-                    onReset={() => run(() => api.reset(session.session_id), "Reset failed.")}
+                    onReset={() => run(() => api.reset(session.session_id), "Reset failed.", "resetting")}
                     onTrack={() => go("/track")}
                     hindi={hindi}
                   />
                 )}
               </div>
-              <FieldPanel service={session.service?.name} fields={session.fields} hindi={hindi} stateLabel={stateLabel || session.state} />
+              <FieldPanel
+                service={session.service?.name}
+                fields={session.fields}
+                hindi={hindi}
+                stateLabel={stateLabel || session.state}
+              />
             </div>
           </>
         ) : null}
       </main>
       <footer className="gov-footer">
         <div>
-          <p><strong>{hindi ? "नगरपालिका नागरिक प्रकोष्ठ" : "Municipal Civic Cell"}</strong></p>
+          <p>
+            <strong>{hindi ? "नगरपालिका नागरिक प्रकोष्ठ" : "Municipal Civic Cell"}</strong>
+          </p>
           <p>{hindi ? "नागरिक शिकायत निवारण का डेमो पोर्टल" : "Demonstration portal for civic grievance intake"}</p>
         </div>
         <ul>
@@ -256,11 +375,19 @@ function UtilityBar({
     <div className="utility">
       <span>भारत सरकार | Government of India</span>
       <div className="utility-actions">
-        <button type="button" onClick={onLanguage}>{hindi ? "English" : "हिन्दी"}</button>
+        <button type="button" onClick={onLanguage}>
+          {hindi ? "English" : "हिन्दी"}
+        </button>
         <span className="font-controls" aria-label="Text size">
-          <button type="button" onClick={() => onFont(Math.max(0, fontStep - 1))} disabled={fontStep === 0}>A-</button>
-          <button type="button" onClick={() => onFont(1)}>A</button>
-          <button type="button" onClick={() => onFont(Math.min(2, fontStep + 1))} disabled={fontStep === 2}>A+</button>
+          <button type="button" onClick={() => onFont(Math.max(0, fontStep - 1))} disabled={fontStep === 0}>
+            A-
+          </button>
+          <button type="button" onClick={() => onFont(1)}>
+            A
+          </button>
+          <button type="button" onClick={() => onFont(Math.min(2, fontStep + 1))} disabled={fontStep === 2}>
+            A+
+          </button>
         </span>
       </div>
     </div>
@@ -302,7 +429,11 @@ function Masthead({
       </div>
       <div className="masthead-actions">
         <p className="live-status">{stateLabel}</p>
-        {showReset && <button type="button" onClick={onReset} disabled={busy}>{hindi ? "आवेदन रीसेट" : "Reset application"}</button>}
+        {showReset && (
+          <button type="button" onClick={onReset} disabled={busy}>
+            {hindi ? "आवेदन रीसेट" : "Reset application"}
+          </button>
+        )}
       </div>
     </header>
   );

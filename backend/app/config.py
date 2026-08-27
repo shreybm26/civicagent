@@ -56,6 +56,10 @@ class Settings:
     # Multimodal Gemini requests can take considerably longer than text-only
     # requests, especially on the first request or when the model is busy.
     gemini_timeout_seconds: float = _positive_float_env("GEMINI_TIMEOUT_SECONDS", 120.0)
+    # OpenRouter is used only for image analysis when OPENROUTER_API_KEY is set.
+    openrouter_api_key: str = os.getenv("OPENROUTER_API_KEY", "")
+    openrouter_model: str = os.getenv("OPENROUTER_MODEL", "google/gemini-2.5-flash")
+    openrouter_timeout_seconds: float = _positive_float_env("OPENROUTER_TIMEOUT_SECONDS", 120.0)
     cors_origins: tuple[str, ...] = _origins_env()
     max_upload_bytes: int = _int_env("MAX_UPLOAD_BYTES", 10 * 1024 * 1024)
     max_sessions: int = _int_env("MAX_SESSIONS", 100)
