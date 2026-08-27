@@ -10,13 +10,36 @@ export type CivicApi = {
   reset(id: string): Promise<SessionView>;
 };
 
+export class CivicApiError extends Error {
+  status: number;
+  code?: string;
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.status = status;
+    this.code = code;
+  }
+}
+
 const base =
   import.meta.env.VITE_API_URL ??
   (import.meta.env.DEV ? "http://localhost:8000" : "");
 
 async function call(path: string, init?: RequestInit): Promise<SessionView> {
   const r = await fetch(base + path, init);
-  if (!r.ok) throw new Error("Request failed");
+  if (!r.ok) {
+    let message = `Request failed (${r.status})`;
+    let code: string | undefined;
+    try {
+      const body = await r.json();
+      const detail = body?.detail;
+      if (typeof detail === "string") message = detail;
+      else if (detail?.message) message = detail.message;
+      if (detail?.code) code = detail.code;
+    } catch {
+      /* keep generic message */
+    }
+    throw new CivicApiError(message, r.status, code);
+  }
   return r.json();
 }
 
@@ -53,3 +76,7 @@ export const api: CivicApi = {
     }),
   reset: (id) => call(`/api/session/${id}/reset`, { method: "POST" }),
 };
+
+export function isExpiredSession(error: unknown): boolean {
+  return error instanceof CivicApiError && (error.status === 404 || error.code === "SESSION_NOT_FOUND");
+}

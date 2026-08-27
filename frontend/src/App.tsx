@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api } from "./lib/api";
+import { api, isExpiredSession } from "./lib/api";
 import { conversation, STATE_LABEL } from "./lib/conversation";
 import type { SessionView } from "./lib/types";
 import { ChatPanel } from "./features/chat/ChatPanel";
@@ -32,11 +32,38 @@ export default function App() {
     setError("");
     try {
       setSession(await task());
-    } catch {
-      setError(fallback);
+    } catch (caught) {
+      if (isExpiredSession(caught)) {
+        try {
+          setSession(await api.createSession());
+          setError("The previous session expired after a server restart. Send the message again.");
+          return;
+        } catch {
+          setError("The session expired. Refresh the page.");
+          return;
+        }
+      }
+      setError(caught instanceof Error && caught.message ? caught.message : fallback);
     } finally {
       setBusy(false);
     }
+  }
+
+  async function send(value: string) {
+    const sessionId = session?.session_id;
+    if (!sessionId) {
+      setError("The grievance cell could not start. Please refresh.");
+      return;
+    }
+    await run(async () => {
+      try {
+        return await api.sendMessage(sessionId, value);
+      } catch (caught) {
+        if (!isExpiredSession(caught)) throw caught;
+        const fresh = await api.createSession();
+        return api.sendMessage(fresh.session_id, value);
+      }
+    }, "That message could not be recorded. Try again.");
   }
 
   if (!session) {
@@ -102,7 +129,7 @@ export default function App() {
           <div>
             <ChatPanel
               messages={messages}
-              onSend={(value) => run(() => api.sendMessage(session.session_id, value), "That message could not be recorded. Try again.")}
+              onSend={send}
               busy={busy}
               hindi={hindi}
               showSuggestions={session.state === "IDLE"}

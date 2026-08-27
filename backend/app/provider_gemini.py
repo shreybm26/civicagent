@@ -72,23 +72,28 @@ class GeminiBackedRouter:
         self._fallback = fallback
 
     def classify(self, message: str, schemas: dict[ServiceId, ServiceSchema]) -> RouterResult:
-        prompt = (
-            "Classify this civic complaint into exactly one service_id. "
-            f"Allowed ids: {list(KNOWN_SERVICES)}. "
-            'Return JSON {"service_id": string|null, "confidence": number, "needs_clarification": boolean}. '
-            f"Citizen message: {message[:1000]}"
-        )
-        data = self._client.generate_json(prompt)
-        service_id = data.get("service_id") if data else None
-        confidence = float((data or {}).get("confidence") or 0.0)
-        if service_id in schemas and confidence >= 0.7:
-            return RouterResult(
-                service_id=service_id,
-                confidence=min(confidence, 1.0),
-                needs_clarification=False,
-                message=f"I identified this as a {schemas[service_id].service_name.lower()}.",
+        fallback = self._fallback.classify(message, schemas)
+        if fallback.service_id and not fallback.needs_clarification:
+            return fallback
+        try:
+            data = self._client.generate_json(
+                "Classify this civic complaint into exactly one service_id. "
+                f"Allowed ids: {list(KNOWN_SERVICES)}. "
+                'Return JSON {"service_id": string|null, "confidence": number, "needs_clarification": boolean}. '
+                f"Citizen message: {message[:1000]}"
             )
-        return self._fallback.classify(message, schemas)
+            service_id = str((data or {}).get("service_id") or "").strip().lower()
+            confidence = _confidence((data or {}).get("confidence"))
+            if service_id in schemas and confidence >= 0.7:
+                return RouterResult(
+                    service_id=service_id,  # type: ignore[arg-type]
+                    confidence=confidence,
+                    needs_clarification=False,
+                    message=f"I identified this as a {schemas[service_id].service_name.lower()}.",
+                )
+        except Exception:
+            logger.info("gemini_fallback", extra={"civic_event": {"event": "classify_fallback"}})
+        return fallback
 
 
 class GeminiBackedCollector:
@@ -100,30 +105,40 @@ class GeminiBackedCollector:
         local = self._fallback.collect(field, message)
         if local is not None:
             return local
-        options = list(field.options) if field.options else []
-        prompt = (
-            f'Extract a value for field "{field.id}" of type "{field.field_type}". '
-            f"Allowed options: {options or 'any short text'}. "
-            'Return JSON {"value": string|null, "confidence": number}. '
-            "If the message does not contain this field, value must be null. "
-            f"Citizen message: {message[:1000]}"
-        )
-        data = self._client.generate_json(prompt)
-        value = data.get("value") if data else None
-        if value in (None, ""):
+        try:
+            options = list(field.options) if field.options else []
+            data = self._client.generate_json(
+                f'Extract a value for field "{field.id}" of type "{field.field_type}". '
+                f"Allowed options: {options or 'any short text'}. "
+                'Return JSON {"value": string|null, "confidence": number}. '
+                "If the message does not contain this field, value must be null. "
+                f"Citizen message: {message[:1000]}"
+            )
+            value = (data or {}).get("value")
+            if value in (None, ""):
+                return None
+            if options and str(value).lower() not in {option.lower() for option in options}:
+                return None
+            if options:
+                value = str(value).lower()
+            return Candidate(
+                field_id=field.id,
+                value=value,
+                source="conversation",
+                confidence=_confidence((data or {}).get("confidence") or 0.75),
+                reason="Suggested from the citizen’s message",
+            )
+        except Exception:
+            logger.info("gemini_fallback", extra={"civic_event": {"event": "collect_fallback"}})
             return None
-        if options and str(value).lower() not in {option.lower() for option in options}:
-            return None
-        if options:
-            value = str(value).lower()
-        confidence = float(data.get("confidence") or 0.75)
-        return Candidate(
-            field_id=field.id,
-            value=value,
-            source="conversation",
-            confidence=min(max(confidence, 0.0), 1.0),
-            reason="Suggested from the citizen’s message",
-        )
+
+
+def _confidence(value: Any) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    return min(max(parsed, 0.0), 1.0)
 
 
 def build_workflow_ports(settings: Settings):
