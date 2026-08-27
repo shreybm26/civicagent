@@ -149,6 +149,7 @@ def _settings(tmp_path: Path, **overrides: object) -> Settings:
         "supabase_service_role_key": "",
         "tracking_pepper": PEPPER,
         "resend_api_key": "",
+        "sendgrid_api_key": "",
         "smtp_username": "",
         "smtp_password": "",
         "public_base_url": "https://civicagent.example",
@@ -227,6 +228,67 @@ def test_track_email_sends_via_resend_when_confirmed(tmp_path: Path) -> None:
     assert posted.call_args.kwargs["headers"]["Authorization"] == "Bearer re_test_key"
 
 
+def test_track_email_prefers_https_resend_over_blocked_smtp(tmp_path: Path) -> None:
+    client = TestClient(
+        create_app(
+            _settings(
+                tmp_path,
+                resend_api_key="re_test_key",
+                smtp_username="civicagent.demo@gmail.com",
+                smtp_password="app-password",
+            )
+        )
+    )
+    receipt = _lodge_pothole(client)
+    response_mock = Mock(status_code=200)
+    response_mock.json.return_value = {"id": "msg_https"}
+    with patch("app.mailer.httpx.post", return_value=response_mock) as posted, patch("app.mailer.smtplib.SMTP") as smtp_cls:
+        sent = client.post(
+            "/api/track/email",
+            json={
+                "sr_id": receipt["reference"],
+                "access_key": receipt["access_key"],
+                "email": "owner@example.com",
+                "confirm_send": True,
+            },
+        )
+    assert sent.status_code == 200
+    posted.assert_called_once()
+    smtp_cls.assert_not_called()
+
+
+def test_track_email_sends_via_sendgrid_to_any_inbox(tmp_path: Path) -> None:
+    client = TestClient(
+        create_app(
+            _settings(
+                tmp_path,
+                sendgrid_api_key="SG.test_key",
+                sendgrid_from="CivicAgent Demo <civicagent.demo@gmail.com>",
+                resend_api_key="re_should_not_be_used",
+            )
+        )
+    )
+    receipt = _lodge_pothole(client)
+    response_mock = Mock(status_code=202)
+    with patch("app.mailer.httpx.post", return_value=response_mock) as posted:
+        sent = client.post(
+            "/api/track/email",
+            json={
+                "sr_id": receipt["reference"],
+                "access_key": receipt["access_key"],
+                "email": "teammate@example.com",
+                "confirm_send": True,
+            },
+        )
+    assert sent.status_code == 200
+    assert sent.json() == {"sent": True, "to": "teammate@example.com"}
+    assert posted.call_args.args[0] == "https://api.sendgrid.com/v3/mail/send"
+    body = posted.call_args.kwargs["json"]
+    assert body["personalizations"][0]["to"][0]["email"] == "teammate@example.com"
+    assert body["from"]["email"] == "civicagent.demo@gmail.com"
+    assert posted.call_args.kwargs["headers"]["Authorization"] == "Bearer SG.test_key"
+
+
 def test_track_email_explains_resend_test_sender_limit(tmp_path: Path) -> None:
     client = TestClient(create_app(_settings(tmp_path, resend_api_key="re_test_key")))
     receipt = _lodge_pothole(client)
@@ -280,7 +342,7 @@ def test_track_email_sends_via_smtp_to_any_inbox(tmp_path: Path) -> None:
         create_app(
             _settings(
                 tmp_path,
-                resend_api_key="re_should_not_be_used",
+                resend_api_key="",
                 smtp_username="civicagent.demo@gmail.com",
                 smtp_password="app- pass word",
                 smtp_from="CivicAgent Demo <civicagent.demo@gmail.com>",

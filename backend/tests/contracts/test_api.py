@@ -16,7 +16,7 @@ def test_health_exposes_safe_runtime_metadata() -> None:
     assert payload["schemas"] == 5
     assert payload["tracking_store"] in {"sqlite", "supabase"}
     assert payload["mail_configured"] in {True, False}
-    assert payload["mail_backend"] in {"smtp", "resend", "none"}
+    assert payload["mail_backend"] in {"sendgrid", "smtp", "resend", "none"}
     assert "GEMINI_API_KEY" not in response.text
     assert "SUPABASE_SERVICE_ROLE_KEY" not in response.text
 

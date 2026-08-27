@@ -77,6 +77,8 @@ class Settings:
     tracking_pepper: str = os.getenv("TRACKING_PEPPER", "civicagent-demo-tracking").strip() or "civicagent-demo-tracking"
     resend_api_key: str = os.getenv("RESEND_API_KEY", "").strip()
     resend_from: str = os.getenv("RESEND_FROM", "CivicAgent Demo <onboarding@resend.dev>").strip()
+    sendgrid_api_key: str = os.getenv("SENDGRID_API_KEY", "").strip()
+    sendgrid_from: str = os.getenv("SENDGRID_FROM", "").strip()
     smtp_host: str = os.getenv("SMTP_HOST", "smtp.gmail.com").strip() or "smtp.gmail.com"
     smtp_port: int = _int_env("SMTP_PORT", 587)
     smtp_username: str = os.getenv("SMTP_USERNAME", "").strip()
@@ -98,14 +100,16 @@ class Settings:
 
     @property
     def mail_configured(self) -> bool:
-        return bool(self.smtp_username and self.smtp_password) or bool(self.resend_api_key)
+        return bool(self.sendgrid_api_key) or bool(self.resend_api_key) or bool(self.smtp_username and self.smtp_password)
 
     @property
     def mail_backend(self) -> str:
-        if self.smtp_username and self.smtp_password:
-            return "smtp"
+        if self.sendgrid_api_key:
+            return "sendgrid"
         if self.resend_api_key:
             return "resend"
+        if self.smtp_username and self.smtp_password:
+            return "smtp"
         return "none"
 
 

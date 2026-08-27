@@ -69,25 +69,18 @@ The track page also shows a **demonstration neighbourhood picture**: counts by i
 
 After submit, citizens can email themselves the service request ID, access key, and tracking link. The API will not send until they tick confirm — a typo would leak the key. This is demonstration mail, not a department notice.
 
-**Use Gmail SMTP if anyone besides you needs to receive the mail** (teammates, judges). Resend's `onboarding@resend.dev` test sender can only deliver to the Resend account owner.
+**Railway Hobby blocks Gmail SMTP** (ports 587/465). Do not use `SMTP_*` on this contest deploy. Send over HTTPS:
 
-1. In Google Account → Security, turn on 2-Step Verification, then create an [App password](https://myaccount.google.com/apppasswords) for Mail. Do **not** use your normal Gmail password.
-2. In Railway → Variables, add:
+1. **SendGrid** (any inbox — teammates and judges):
+   - Create a [SendGrid](https://signup.sendgrid.com/) account.
+   - Settings → Sender Authentication → **Verify a Single Sender** using your Gmail. Click the confirmation link in that inbox.
+   - Settings → API Keys → create a key with Mail Send.
+   - Railway variables: `SENDGRID_API_KEY` = `SG.…`, `SENDGRID_FROM` = `CivicAgent Demo <your-gmail@gmail.com>`
+2. **Resend** (already set): `onboarding@resend.dev` can only deliver to the Resend account owner. Keep it as a fallback. To mail anyone via Resend, verify your own domain and change `RESEND_FROM`.
 
-   | Name | Value |
-   | --- | --- |
-   | `SMTP_USERNAME` | your Gmail address |
-   | `SMTP_PASSWORD` | the 16-character app password |
-   | `SMTP_FROM` | `CivicAgent Demo <your-gmail@gmail.com>` |
-   | `SMTP_HOST` | `smtp.gmail.com` (optional; this is the default) |
-   | `SMTP_PORT` | `587` (optional; this is the default) |
-   | `PUBLIC_BASE_URL` | your Railway `https://…` URL (optional if the request host is already that URL) |
+Confirm `/health` includes `"mail_configured": true` and `"mail_backend":"sendgrid"` (or `"resend"`). You can leave the unused `SMTP_*` variables; they are ignored when SendGrid or Resend is set.
 
-3. Confirm `/health` includes `"mail_configured": true` and `"mail_backend":"smtp"`. Lodge a grievance and send a test to someone else's inbox.
-
-Resend remains optional. If only `RESEND_API_KEY` is set with `onboarding@resend.dev`, mail still works for the account owner and tracking still works for everyone else.
-
-Without SMTP or Resend, tracking still works; send returns a clear “not configured” error.
+Without a mail key, tracking still works; send returns a clear “not configured” error.
 
 ## Deploy (public URL)
 
@@ -112,9 +105,9 @@ Do not put the API on Vercel. Vercel functions are stateless; creating a session
    | `SUPABASE_URL` | your Supabase project URL (see **Track a grievance** above) |
    | `SUPABASE_SERVICE_ROLE_KEY` | Supabase `service_role` secret (backend only) |
    | `TRACKING_PEPPER` | random string used to hash access keys |
-   | `SMTP_USERNAME` | Gmail address used to send acknowledgements to any inbox |
-   | `SMTP_PASSWORD` | Gmail app password (not the account password) |
-   | `SMTP_FROM` | `CivicAgent Demo <your-gmail@gmail.com>` |
+   | `SENDGRID_API_KEY` | SendGrid key (HTTPS; required to mail any inbox on Hobby) |
+   | `SENDGRID_FROM` | `CivicAgent Demo <your-verified-gmail@gmail.com>` |
+   | `RESEND_API_KEY` | optional Resend fallback |
    | `PUBLIC_BASE_URL` | public `https://…` URL for links in the email (optional) |
 
    Leave `VITE_API_URL` unset. Do not add `GEMINI_API_KEY` for the contest demo. Never add `SUPABASE_SERVICE_ROLE_KEY` to the frontend.

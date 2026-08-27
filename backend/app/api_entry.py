@@ -208,6 +208,8 @@ def build_api_router(
                 track_url=_public_track_url(request, settings),
                 resend_api_key=settings.resend_api_key,
                 resend_from=settings.resend_from,
+                sendgrid_api_key=settings.sendgrid_api_key,
+                sendgrid_from=settings.sendgrid_from,
                 smtp_host=settings.smtp_host,
                 smtp_port=settings.smtp_port,
                 smtp_username=settings.smtp_username,

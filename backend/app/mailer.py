@@ -14,6 +14,7 @@ import httpx
 from .contracts import TrackingField, TrackingView
 
 RESEND_URL = "https://api.resend.com/emails"
+SENDGRID_URL = "https://api.sendgrid.com/v3/mail/send"
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
@@ -91,6 +92,8 @@ def send_acknowledgement(
     track_url: str,
     resend_api_key: str = "",
     resend_from: str = "",
+    sendgrid_api_key: str = "",
+    sendgrid_from: str = "",
     smtp_host: str = "",
     smtp_port: int = 587,
     smtp_username: str = "",
@@ -102,13 +105,11 @@ def send_acknowledgement(
     subject = f"Demo acknowledgement {view.sr_id}"
     smtp_password = "".join(smtp_password.split())
     smtp_username = smtp_username.strip()
-    if smtp_configured(smtp_username, smtp_password):
-        _send_via_smtp(
-            host=smtp_host or "smtp.gmail.com",
-            port=smtp_port or 587,
-            username=smtp_username,
-            password=smtp_password,
-            from_address=_smtp_from(smtp_from, smtp_username),
+    # HTTPS first: Railway Hobby blocks outbound SMTP (587/465).
+    if sendgrid_api_key.strip():
+        _send_via_sendgrid(
+            api_key=sendgrid_api_key,
+            from_address=sendgrid_from or smtp_from or smtp_username,
             to_email=to_email,
             subject=subject,
             text=text,
@@ -119,6 +120,19 @@ def send_acknowledgement(
         _send_via_resend(
             api_key=resend_api_key,
             from_address=resend_from,
+            to_email=to_email,
+            subject=subject,
+            text=text,
+            html_body=html_body,
+        )
+        return
+    if smtp_configured(smtp_username, smtp_password):
+        _send_via_smtp(
+            host=smtp_host or "smtp.gmail.com",
+            port=smtp_port or 587,
+            username=smtp_username,
+            password=smtp_password,
+            from_address=_smtp_from(smtp_from, smtp_username),
             to_email=to_email,
             subject=subject,
             text=text,
@@ -161,8 +175,47 @@ def _send_via_smtp(
             smtp.sendmail(envelope_from, [to_email], message.as_string())
     except smtplib.SMTPAuthenticationError as exc:
         raise MailError("The mail service rejected the SMTP login. Check the app password.") from exc
+    except TimeoutError as exc:
+        raise MailError(
+            "Could not reach Gmail SMTP. Railway Hobby blocks outbound mail ports; use SendGrid or Resend over HTTPS."
+        ) from exc
     except (smtplib.SMTPException, OSError) as exc:
+        raise MailError(
+            "Could not reach Gmail SMTP. Railway Hobby blocks outbound mail ports; use SendGrid or Resend over HTTPS."
+        ) from exc
+
+
+def _send_via_sendgrid(
+    *,
+    api_key: str,
+    from_address: str,
+    to_email: str,
+    subject: str,
+    text: str,
+    html_body: str,
+) -> None:
+    name, email = parseaddr(from_address)
+    if not email:
+        raise MailError("Set SENDGRID_FROM to the Gmail address you verified in SendGrid.")
+    try:
+        response = httpx.post(
+            SENDGRID_URL,
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={
+                "personalizations": [{"to": [{"email": to_email}]}],
+                "from": {"email": email, "name": name or "CivicAgent Demo"},
+                "subject": subject,
+                "content": [
+                    {"type": "text/plain", "value": text},
+                    {"type": "text/html", "value": html_body},
+                ],
+            },
+            timeout=20.0,
+        )
+    except httpx.HTTPError as exc:
         raise MailError("The mail service is temporarily unavailable.") from exc
+    if response.status_code >= 400:
+        raise MailError(_sendgrid_error_message(response))
 
 
 def _send_via_resend(
@@ -206,4 +259,21 @@ def _resend_error_message(response: httpx.Response) -> str:
             "This demo sender can only deliver to the Resend account owner's inbox. "
             "Use Track application with the service request ID if you entered a different address."
         )
+    return generic
+
+
+def _sendgrid_error_message(response: httpx.Response) -> str:
+    generic = "The acknowledgement email could not be sent. Check the address and try again."
+    try:
+        payload = response.json()
+    except ValueError:
+        return generic
+    errors = payload.get("errors") if isinstance(payload, dict) else None
+    raw = ""
+    if isinstance(errors, list) and errors:
+        first = errors[0]
+        raw = str(first.get("message") if isinstance(first, dict) else first)
+    text = raw.lower()
+    if "verified" in text or ("from" in text and "permission" in text):
+        return "Verify this From address as a Single Sender in SendGrid, then try again."
     return generic
