@@ -34,23 +34,28 @@ export function StreamingAgentText({
 
     const tokens = tokenize(text);
     let index = 0;
+    let timer = 0;
     setVisible("");
     setStreaming(true);
 
-    const timer = window.setInterval(() => {
+    const tick = () => {
       if (cancelled) return;
       index += 1;
       setVisible(tokens.slice(0, index).join(""));
       if (index >= tokens.length) {
-        window.clearInterval(timer);
         setStreaming(false);
         onCompleteRef.current?.();
+        return;
       }
-    }, 28);
+      const just = tokens[index - 1] ?? "";
+      const pause = /[.!?…]["')\]]*$/.test(just.trim()) ? 220 : /[,;:]$/.test(just.trim()) ? 120 : 58;
+      timer = window.setTimeout(tick, pause);
+    };
+    timer = window.setTimeout(tick, 58);
 
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
+      window.clearTimeout(timer);
     };
   }, [messageKey, text]);
 

@@ -13,6 +13,8 @@ type Props = {
   hindi: boolean;
   showSuggestions: boolean;
   contextualStep?: ReactNode;
+  /** Stable id for the current step so the form stays mounted across busy/stream. */
+  contextualKey?: string;
   composerEnabled?: boolean;
   mediaUrl: (mediaId: string) => string;
   pendingAction?: PendingAction;
@@ -31,6 +33,7 @@ export function ChatPanel({
   hindi,
   showSuggestions,
   contextualStep,
+  contextualKey = "",
   composerEnabled = true,
   mediaUrl,
   pendingAction = null,
@@ -40,8 +43,10 @@ export function ChatPanel({
   const [value, setValue] = useState("");
   const [awayFromLatest, setAwayFromLatest] = useState(false);
   const [, setStreamTick] = useState(0);
+  const [anchoredStep, setAnchoredStep] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
   const messagesRef = useRef<HTMLDivElement | null>(null);
+  const contextualRef = useRef<HTMLDivElement | null>(null);
   const nearBottomRef = useRef(true);
   const forceScrollRef = useRef(false);
   const completedRef = useRef<Set<string>>(new Set());
@@ -56,6 +61,17 @@ export function ChatPanel({
   }, [scrollToken]);
 
   useEffect(() => {
+    if (!contextualStep || !contextualKey) {
+      setAnchoredStep(null);
+      return;
+    }
+    // Anchor after the opening stream so the form does not vanish again while busy/saving.
+    if (!needsStream) setAnchoredStep(contextualKey);
+  }, [contextualStep, contextualKey, needsStream]);
+
+  const showContextual = Boolean(contextualStep) && Boolean(contextualKey) && anchoredStep === contextualKey;
+
+  useEffect(() => {
     const box = messagesRef.current;
     if (!box) return;
     if (forceScrollRef.current || nearBottomRef.current) {
@@ -66,7 +82,12 @@ export function ChatPanel({
     } else {
       setAwayFromLatest(true);
     }
-  }, [messages, busy, needsStream, pendingAction]);
+  }, [messages, busy, needsStream, pendingAction, showContextual]);
+
+  useEffect(() => {
+    if (!showContextual) return;
+    contextualRef.current?.scrollIntoView({ block: "nearest" });
+  }, [showContextual, contextualKey]);
 
   function onScroll() {
     const box = messagesRef.current;
@@ -98,7 +119,6 @@ export function ChatPanel({
 
   const activity = activityLabel(pendingAction, hindi);
   const latestAgent = [...messages].reverse().find((message) => message.role === "agent");
-  const showContextual = Boolean(contextualStep) && !busy && !needsStream;
 
   return (
     <section className="chat" aria-labelledby="assistant-title">
@@ -176,7 +196,11 @@ export function ChatPanel({
         </button>
       )}
 
-      {showContextual && <div className="chat-contextual">{contextualStep}</div>}
+      {showContextual && (
+        <div className="chat-contextual" ref={contextualRef}>
+          {contextualStep}
+        </div>
+      )}
 
       {showSuggestions && (
         <div className="chips" aria-label={hindi ? "सुझाए गए मुद्दे" : "Suggested issues"}>

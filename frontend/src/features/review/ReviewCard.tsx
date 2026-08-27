@@ -70,94 +70,98 @@ export function ReviewCard({
         <span>{hindi ? "समीक्षा और पुष्टि" : "Review and confirmation"}</span>
         <strong>{department || (hindi ? "संबंधित विभाग" : "Assigned department")}</strong>
       </div>
-      <p>
-        {hindi
-          ? "प्रस्तुत करने से पहले विवरण जाँचें। आप कोई भी मान बदल सकते हैं।"
-          : "Check and edit every field before submitting. You can change any suggested value."}
-      </p>
-      {fields.map((field) => {
-        const value = drafts[field.id] ?? "";
-        const unchanged = value === text(field);
-        const options = FIELD_OPTIONS[field.id];
-        return (
-          <div className="review-row" key={field.id}>
-            <label htmlFor={`review-${field.id}`}>
-              <span>
-                {field.id.replaceAll("_", " ")}
-                {field.required ? " *" : ""}
-              </span>
-              {field.id === "photo" ? (
-                <output id={`review-${field.id}`} className="attachment-status">
-                  {photoAdded
-                    ? hindi
-                      ? "तस्वीर जुड़ी है"
-                      : "Image attached"
-                    : hindi
-                      ? "कोई तस्वीर नहीं"
-                      : "No image attached"}
-                </output>
-              ) : options ? (
-                <span className="choice-bubbles" id={`review-${field.id}`}>
-                  {options.map((option) => (
-                    <button
-                      type="button"
-                      className={value === option ? "choice-bubble selected" : "choice-bubble"}
-                      key={option}
-                      disabled={busy || saving !== null}
-                      onClick={() => setDrafts((current) => ({ ...current, [field.id]: option }))}
-                    >
-                      {hindi
-                        ? OPTION_LABELS[option]?.hi || option
-                        : OPTION_LABELS[option]?.en || option.replaceAll("_", " ")}
-                    </button>
-                  ))}
+      <div className="review-scroll">
+        <p>
+          {hindi
+            ? "प्रस्तुत करने से पहले विवरण जाँचें। आप कोई भी मान बदल सकते हैं।"
+            : "Check and edit every field before submitting. You can change any suggested value."}
+        </p>
+        {fields.map((field) => {
+          const value = drafts[field.id] ?? "";
+          const unchanged = value === text(field);
+          const options = FIELD_OPTIONS[field.id];
+          return (
+            <div className="review-row" key={field.id}>
+              <label htmlFor={`review-${field.id}`}>
+                <span>
+                  {field.id.replaceAll("_", " ")}
+                  {field.required ? " *" : ""}
                 </span>
-              ) : field.id === "additional_details" ? (
-                <textarea
-                  id={`review-${field.id}`}
-                  value={value}
-                  disabled={busy || saving !== null}
-                  onChange={(event) =>
-                    setDrafts((current) => ({ ...current, [field.id]: event.target.value }))
-                  }
-                />
-              ) : (
-                <input
-                  id={`review-${field.id}`}
-                  value={value}
-                  disabled={busy || saving !== null}
-                  onChange={(event) =>
-                    setDrafts((current) => ({ ...current, [field.id]: event.target.value }))
-                  }
-                />
+                {field.id === "photo" ? (
+                  <output id={`review-${field.id}`} className="attachment-status">
+                    {photoAdded
+                      ? hindi
+                        ? "तस्वीर जुड़ी है"
+                        : "Image attached"
+                      : hindi
+                        ? "कोई तस्वीर नहीं"
+                        : "No image attached"}
+                  </output>
+                ) : options ? (
+                  <span className="choice-bubbles" id={`review-${field.id}`}>
+                    {options.map((option) => (
+                      <button
+                        type="button"
+                        className={value === option ? "choice-bubble selected" : "choice-bubble"}
+                        key={option}
+                        disabled={busy || saving !== null}
+                        onClick={() => setDrafts((current) => ({ ...current, [field.id]: option }))}
+                      >
+                        {hindi
+                          ? OPTION_LABELS[option]?.hi || option
+                          : OPTION_LABELS[option]?.en || option.replaceAll("_", " ")}
+                      </button>
+                    ))}
+                  </span>
+                ) : field.id === "additional_details" ? (
+                  <textarea
+                    id={`review-${field.id}`}
+                    value={value}
+                    disabled={busy || saving !== null}
+                    onChange={(event) =>
+                      setDrafts((current) => ({ ...current, [field.id]: event.target.value }))
+                    }
+                  />
+                ) : (
+                  <input
+                    id={`review-${field.id}`}
+                    value={value}
+                    disabled={busy || saving !== null}
+                    onChange={(event) =>
+                      setDrafts((current) => ({ ...current, [field.id]: event.target.value }))
+                    }
+                  />
+                )}
+              </label>
+              {field.id !== "photo" && (
+                <button
+                  type="button"
+                  onClick={() => void save(field)}
+                  disabled={busy || saving !== null || unchanged || (field.required && !value.trim())}
+                >
+                  {saving === field.id
+                    ? hindi
+                      ? "सहेजा जा रहा है…"
+                      : "Saving…"
+                    : hindi
+                      ? "सहेजें"
+                      : "Save"}
+                </button>
               )}
-            </label>
-            {field.id !== "photo" && (
-              <button
-                type="button"
-                onClick={() => void save(field)}
-                disabled={busy || saving !== null || unchanged || (field.required && !value.trim())}
-              >
-                {saving === field.id
-                  ? hindi
-                    ? "सहेजा जा रहा है…"
-                    : "Saving…"
-                  : hindi
-                    ? "सहेजें"
-                    : "Save"}
-              </button>
-            )}
-          </div>
-        );
-      })}
-      <button type="button" className="primary" onClick={onSubmit} disabled={busy || saving !== null}>
-        {hindi ? "शिकायत प्रस्तुत करें" : "Submit grievance"}
-      </button>
-      <small>
-        {hindi
-          ? "यह डेमो रसीद है। कोई सरकारी प्रणाली संपर्क में नहीं है।"
-          : "This is a demo acknowledgement. No live government system is contacted."}
-      </small>
+            </div>
+          );
+        })}
+      </div>
+      <div className="review-actions">
+        <button type="button" className="primary" onClick={onSubmit} disabled={busy || saving !== null}>
+          {hindi ? "शिकायत प्रस्तुत करें" : "Submit grievance"}
+        </button>
+        <small>
+          {hindi
+            ? "यह डेमो रसीद है। कोई सरकारी प्रणाली संपर्क में नहीं है।"
+            : "This is a demo acknowledgement. No live government system is contacted."}
+        </small>
+      </div>
     </section>
   );
 }

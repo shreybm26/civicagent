@@ -165,8 +165,10 @@ export default function App() {
       session.state === "LOCATION_REQUIRED");
 
   let contextualStep = null;
+  let contextualKey = "";
   if (session) {
     if (showLocation) {
+      contextualKey = `location:${session.state}`;
       contextualStep = (
         <LocationConfirmation
           onConfirm={(pick) =>
@@ -184,6 +186,7 @@ export default function App() {
         />
       );
     } else if (hasLocation && !imageHandled) {
+      contextualKey = `evidence:${session.state}`;
       contextualStep = (
         <EvidencePanel
           onChoose={(hasImage) => {
@@ -197,15 +200,22 @@ export default function App() {
         />
       );
     } else if (hasLocation && imageHandled && session.state !== "REVIEWING" && session.state !== "COMPLETED") {
-      contextualStep = (
-        <RemainingFieldsForm
-          fields={session.fields}
-          onSave={(id, value) => run(() => api.editField(session.session_id, id, value), "That detail could not be saved.", "saving_details")}
-          busy={busy}
-          hindi={hindi}
-        />
+      const nextField = session.fields.find(
+        (field) => field.required && (field.value == null || field.value === ""),
       );
+      if (nextField) {
+        contextualKey = `fields:${session.state}:${nextField.id}`;
+        contextualStep = (
+          <RemainingFieldsForm
+            fields={session.fields}
+            onSave={(id, value) => run(() => api.editField(session.session_id, id, value), "That detail could not be saved.", "saving_details")}
+            busy={busy}
+            hindi={hindi}
+          />
+        );
+      }
     } else if (session.state === "REVIEWING") {
+      contextualKey = `review:${session.session_id}`;
       contextualStep = (
         <ReviewCard
           fields={session.fields}
@@ -315,6 +325,7 @@ export default function App() {
                   hindi={hindi}
                   showSuggestions={session.state === "IDLE"}
                   contextualStep={contextualStep}
+                  contextualKey={contextualKey}
                   composerEnabled={composerEnabled}
                   mediaUrl={(mediaId) => mediaUrl(session.session_id, mediaId)}
                   pendingAction={pendingAction}
