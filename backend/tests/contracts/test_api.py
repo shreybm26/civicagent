@@ -10,8 +10,13 @@ def test_health_exposes_safe_runtime_metadata() -> None:
     response = client.get("/health")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "provider": "mock", "schemas": 5}
+    payload = response.json()
+    assert payload["status"] == "ok"
+    assert payload["provider"] == "mock"
+    assert payload["schemas"] == 5
+    assert payload["tracking_store"] in {"sqlite", "supabase"}
     assert "GEMINI_API_KEY" not in response.text
+    assert "SUPABASE_SERVICE_ROLE_KEY" not in response.text
 
 
 def test_create_message_and_reset_use_typed_shape() -> None:

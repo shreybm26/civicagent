@@ -20,11 +20,48 @@ npm install
 npm run dev
 ```
 
-The default `PROVIDER_MODE=mock` is deterministic and requires no network or API key. The assistant still completes the full lodge → location → evidence → review → receipt path using schema keywords and the Hyderabad location directory. Gemini is optional: set `PROVIDER_MODE=gemini` (or `auto`) and `GEMINI_API_KEY` only if you want live model proposals. The workflow still validates, and mock is used if Gemini fails.
+The default `PROVIDER_MODE=mock` is deterministic and requires no network or API key. The assistant still completes the full lodge → location → evidence → review → receipt path using schema keywords and the Hyderabad location directory. After a successful submit you get a **service request ID** and a one-time **access key**. Use **Track application** (`/track`) to look that request up later. Gemini is optional: set `PROVIDER_MODE=gemini` (or `auto`) and `GEMINI_API_KEY` only if you want live model proposals. The workflow still validates, and mock is used if Gemini fails.
 
 The browser UI is a Municipal Civic Cell demonstration portal (tricolor, bilingual chrome, grievance form). It is not an official government website and must not use the State Emblem.
 
+Live chat sessions stay in memory (they reset when Railway restarts). Submitted grievances are stored so they can be tracked: SQLite on your laptop, Supabase in production.
+
 Run release checks with `py tools/smoke.py` and `py tools/api_demo.py` while the backend is running. See `docs/demo/release-checklist.md` for the complete rehearsal sequence.
+
+## Track a grievance (Supabase)
+
+You need a database for tracking. In-memory storage cannot survive a Railway restart, so a submitted SR ID would vanish. Local development uses SQLite automatically (`backend/data/civicagent-grievances.db`). For the public demo, use Supabase so tracking records live outside the Railway container.
+
+Do these steps once:
+
+1. Open [https://supabase.com](https://supabase.com), sign in, and click **New project**.
+2. Name it something like `civicagent`, pick a region close to India (Mumbai / `ap-south-1` if listed), set a strong database password, and wait until the project is `Active`.
+3. In the left sidebar open **SQL Editor** → **New query**. Paste the contents of `backend/sql/grievances.sql` and click **Run**. That creates `public.grievances` and turns on Row Level Security with **no policies**, so the public `anon` key cannot read or write rows.
+4. Open **Project Settings** (gear) → **API**. Copy:
+   - **Project URL** → this is `SUPABASE_URL` (example: `https://abcdxyz.supabase.co`)
+   - **service_role** key (click **Reveal**) → this is `SUPABASE_SERVICE_ROLE_KEY`
+5. Do **not** put the `anon` `public` key in Railway, and never put `service_role` in frontend code, `VITE_*` variables, GitHub, or chat. The FastAPI backend is the only process that should hold it; it bypasses RLS on purpose.
+6. Generate a pepper used to hash access keys (this is not the login key shown to the citizen):
+
+   ```powershell
+   py -c "import secrets; print(secrets.token_urlsafe(32))"
+   ```
+
+   Copy the output as `TRACKING_PEPPER`. If you change this later, previously issued access keys will stop working.
+7. In Railway → your service → **Variables**, add:
+
+   | Name | Value |
+   | --- | --- |
+   | `SUPABASE_URL` | the Project URL from step 4 |
+   | `SUPABASE_SERVICE_ROLE_KEY` | the `service_role` secret from step 4 |
+   | `TRACKING_PEPPER` | the random string from step 6 |
+
+   Keep `PROVIDER_MODE=mock` and `MAX_SESSIONS=100`. Leave `VITE_API_URL` unset.
+8. Railway will redeploy. Confirm `https://YOUR-SERVICE.up.railway.app/health` includes `"tracking_store":"supabase"`. Then lodge a demo grievance, copy the SR ID and access key from the acknowledgement, open **Track application**, and look it up.
+
+If those three variables are missing, the API falls back to SQLite inside the container. That file is lost on every Railway restart, so tracking will look broken in production until Supabase is configured.
+
+The access key is shown **once** on the receipt. Only a SHA-256 HMAC of it is stored (`key_hash`). The chat transcript and photo bytes are not written to this table.
 
 ## Deploy (public URL)
 
@@ -46,10 +83,13 @@ Do not put the API on Vercel. Vercel functions are stateless; creating a session
    | --- | --- |
    | `PROVIDER_MODE` | `mock` (use `gemini` plus `GEMINI_API_KEY` only for live-model experiments) |
    | `MAX_SESSIONS` | `100` |
+   | `SUPABASE_URL` | your Supabase project URL (see **Track a grievance** above) |
+   | `SUPABASE_SERVICE_ROLE_KEY` | Supabase `service_role` secret (backend only) |
+   | `TRACKING_PEPPER` | random string used to hash access keys |
 
-   Leave `VITE_API_URL` unset. Do not add `GEMINI_API_KEY` for the contest demo.
+   Leave `VITE_API_URL` unset. Do not add `GEMINI_API_KEY` for the contest demo. Never add `SUPABASE_SERVICE_ROLE_KEY` to the frontend.
 5. Open the service Settings and generate a public domain. Keep replicas at **1**.
-6. Confirm `https://YOUR-SERVICE.up.railway.app/health` returns `{"status":"ok","provider":"mock","schemas":5}`, then open the same host in a browser.
+6. Confirm `https://YOUR-SERVICE.up.railway.app/health` returns `status=ok`, `provider=mock`, `schemas=5`, and `tracking_store=supabase`, then open the same host in a browser.
 
 After the domain exists, you can optionally set `CORS_ORIGINS` to that exact `https://…` origin. Same-origin traffic does not need it.
 

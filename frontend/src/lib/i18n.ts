@@ -62,6 +62,11 @@ const PHRASES: [string, string][] = [
   ["I can help report this", "मैं यह दर्ज कर सकता हूँ:"],
   ["I identified this as a", "यह सेवा पहचानी गई:"],
   ["Complaint submitted successfully. Reference:", "शिकायत दर्ज हो गई है। संदर्भ:"],
+  ["Complaint submitted successfully. Service request", "शिकायत दर्ज हो गई है। सेवा अनुरोध"],
+  [
+    "Save the access key on the acknowledgement to track this request.",
+    "आवेदन ट्रैक करने के लिए पावती पर दी गई प्रवेश कुंजी सहेजें।",
+  ],
   ["Updated ", "अपडेट: "],
   ["road / pothole complaint", "सड़क / गड्ढा शिकायत"],
   ["garbage accumulation complaint", "कचरा जमाव शिकायत"],

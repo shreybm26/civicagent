@@ -1,4 +1,4 @@
-import type { SessionView } from "./types";
+import type { SessionView, TrackingView } from "./types";
 
 export type CivicApi = {
   createSession(): Promise<SessionView>;
@@ -10,6 +10,7 @@ export type CivicApi = {
   editField(id: string, field: string, value: unknown): Promise<SessionView>;
   confirm(id: string): Promise<SessionView>;
   reset(id: string): Promise<SessionView>;
+  track(srId: string, accessKey: string): Promise<TrackingView>;
 };
 
 export class CivicApiError extends Error {
@@ -30,7 +31,7 @@ export function mediaUrl(sessionId: string, mediaId: string): string {
   return `${base}/api/session/${sessionId}/media/${mediaId}`;
 }
 
-async function call(path: string, init?: RequestInit): Promise<SessionView> {
+async function callJson<T>(path: string, init?: RequestInit): Promise<T> {
   const r = await fetch(base + path, init);
   if (!r.ok) {
     let message = `Request failed (${r.status})`;
@@ -47,6 +48,10 @@ async function call(path: string, init?: RequestInit): Promise<SessionView> {
     throw new CivicApiError(message, r.status, code);
   }
   return r.json();
+}
+
+async function call(path: string, init?: RequestInit): Promise<SessionView> {
+  return callJson<SessionView>(path, init);
 }
 
 export const api: CivicApi = {
@@ -89,6 +94,12 @@ export const api: CivicApi = {
       body: JSON.stringify({ confirmed: true }),
     }),
   reset: (id) => call(`/api/session/${id}/reset`, { method: "POST" }),
+  track: (srId, accessKey) =>
+    callJson<TrackingView>("/api/track", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sr_id: srId, access_key: accessKey }),
+    }),
 };
 
 export function isExpiredSession(error: unknown): boolean {

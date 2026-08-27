@@ -21,4 +21,7 @@ review = call(f"/api/session/{sid}/message", "POST", {"message":"high"})
 assert review["state"] == "REVIEWING"
 completed = call(f"/api/session/{sid}/confirm", "POST", {"confirmed":True})
 assert completed["state"] == "COMPLETED" and completed["receipt"]["reference"]
+assert completed["receipt"]["access_key"]
+tracked = call("/api/track", "POST", {"sr_id": completed["receipt"]["reference"], "access_key": completed["receipt"]["access_key"]})
+assert tracked["sr_id"] == completed["receipt"]["reference"]
 print(f"backup demo passed: {completed['receipt']['reference']}")

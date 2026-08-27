@@ -9,19 +9,41 @@ import { ReviewCard } from "./features/review/ReviewCard";
 import { ReceiptPanel } from "./features/receipt/ReceiptPanel";
 import { LocationConfirmation } from "./features/location/LocationConfirmation";
 import { RemainingFieldsForm } from "./features/fields/RemainingFieldsForm";
+import { TrackPage } from "./features/track/TrackPage";
 
 const FONT_STEPS = ["15px", "16px", "18px"];
 
+function currentPath(): string {
+  return window.location.pathname.replace(/\/$/, "") || "/";
+}
+
 export default function App() {
+  const [path, setPath] = useState(currentPath);
   const [session, setSession] = useState<SessionView | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [hindi, setHindi] = useState(false);
   const [fontStep, setFontStep] = useState(1);
+  const onTrackPage = path === "/track";
+
+  function go(next: string) {
+    window.history.pushState({}, "", next);
+    setPath(next.replace(/\/$/, "") || "/");
+  }
 
   useEffect(() => {
-    api.createSession().then(setSession).catch(() => setError("The grievance cell could not start. Please refresh."));
+    function onPop() {
+      setPath(currentPath());
+    }
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
   }, []);
+
+  useEffect(() => {
+    if (onTrackPage) return;
+    if (session) return;
+    api.createSession().then(setSession).catch(() => setError("The grievance cell could not start. Please refresh."));
+  }, [onTrackPage, session]);
 
   useEffect(() => {
     document.documentElement.lang = hindi ? "hi" : "en";
@@ -67,7 +89,7 @@ export default function App() {
     }, "That message could not be recorded. Try again.");
   }
 
-  if (!session) {
+  if (!onTrackPage && !session) {
     return (
       <div className="gov-shell">
         <UtilityBar hindi={false} onLanguage={() => undefined} onFont={() => undefined} fontStep={1} />
@@ -80,47 +102,49 @@ export default function App() {
     );
   }
 
-  const messages = conversation(session);
-  const locationMissing = session.fields.some((field) => field.id === "location" && (field.status === "missing" || field.value == null || field.value === ""));
-  const showLocation = session.state === "LOCATION_REQUIRED" || (session.state === "COLLECTING" && locationMissing);
-  const hasLocation = Boolean(session.location?.address);
-  const latestEvidence = session.evidence?.at(-1);
-  const imageHandled = session.image_decision === "skipped" || Boolean(latestEvidence);
-  const stateLabel = hindi ? STATE_LABEL[session.state]?.hi : STATE_LABEL[session.state]?.en;
+  const messages = session ? conversation(session) : [];
+  const locationMissing = session?.fields.some((field) => field.id === "location" && (field.status === "missing" || field.value == null || field.value === "")) ?? false;
+  const showLocation = session?.state === "LOCATION_REQUIRED" || (session?.state === "COLLECTING" && locationMissing);
+  const hasLocation = Boolean(session?.location?.address);
+  const latestEvidence = session?.evidence?.at(-1);
+  const imageHandled = session?.image_decision === "skipped" || Boolean(latestEvidence);
+  const stateLabel = session ? (hindi ? STATE_LABEL[session.state]?.hi : STATE_LABEL[session.state]?.en) : (hindi ? "ट्रैकिंग" : "Tracking");
   let contextualStep = null;
-  if (showLocation) {
-    contextualStep = <LocationConfirmation
-      onConfirm={(pick) => run(() => api.resolveLocationPin(session.session_id, pick), "Location could not be confirmed.")}
-      onResolveText={(text) => run(() => api.resolveLocation(session.session_id, text), "Location could not be verified. Try JNTU Metro or Charminar.")}
-      busy={busy}
-      hindi={hindi}
-    />;
-  } else if (hasLocation && !imageHandled) {
-    contextualStep = <EvidencePanel
-      onChoose={(hasImage) => { if (!hasImage) void run(() => api.decideImage(session.session_id, false), "Image choice could not be saved."); }}
-      onUpload={(file) => run(() => api.uploadMedia(session.session_id, file), "Photo upload failed. You can continue without a photo.")}
-      busy={busy}
-      hindi={hindi}
-    />;
-  } else if (hasLocation && imageHandled && session.state !== "REVIEWING" && session.state !== "COMPLETED") {
-    contextualStep = <>
-      {latestEvidence && <EvidencePanel onChoose={() => undefined} onUpload={() => undefined} busy={busy} evidence={latestEvidence} hindi={hindi} />}
-      <RemainingFieldsForm fields={session.fields} onSave={(id, value) => run(() => api.editField(session.session_id, id, value), "That detail could not be saved.")} busy={busy} />
-    </>;
-  } else if (session.state === "REVIEWING") {
-    contextualStep = <ReviewCard
-      fields={session.fields}
-      department={session.service?.department}
-      onEdit={async (id, value) => {
-        setError("");
-        try { setSession(await api.editField(session.session_id, id, value)); }
-        catch (caught) { setError(caught instanceof Error ? caught.message : "That correction could not be saved."); throw caught; }
-      }}
-      onSubmit={() => run(() => api.confirm(session.session_id), "Submission failed. Please review and retry.")}
-      busy={busy}
-      hindi={hindi}
-      photoAdded={session.image_decision === "added"}
-    />;
+  if (session) {
+    if (showLocation) {
+      contextualStep = <LocationConfirmation
+        onConfirm={(pick) => run(() => api.resolveLocationPin(session.session_id, pick), "Location could not be confirmed.")}
+        onResolveText={(text) => run(() => api.resolveLocation(session.session_id, text), "Location could not be verified. Try JNTU Metro or Charminar.")}
+        busy={busy}
+        hindi={hindi}
+      />;
+    } else if (hasLocation && !imageHandled) {
+      contextualStep = <EvidencePanel
+        onChoose={(hasImage) => { if (!hasImage) void run(() => api.decideImage(session.session_id, false), "Image choice could not be saved."); }}
+        onUpload={(file) => run(() => api.uploadMedia(session.session_id, file), "Photo upload failed. You can continue without a photo.")}
+        busy={busy}
+        hindi={hindi}
+      />;
+    } else if (hasLocation && imageHandled && session.state !== "REVIEWING" && session.state !== "COMPLETED") {
+      contextualStep = <>
+        {latestEvidence && <EvidencePanel onChoose={() => undefined} onUpload={() => undefined} busy={busy} evidence={latestEvidence} hindi={hindi} />}
+        <RemainingFieldsForm fields={session.fields} onSave={(id, value) => run(() => api.editField(session.session_id, id, value), "That detail could not be saved.")} busy={busy} />
+      </>;
+    } else if (session.state === "REVIEWING") {
+      contextualStep = <ReviewCard
+        fields={session.fields}
+        department={session.service?.department}
+        onEdit={async (id, value) => {
+          setError("");
+          try { setSession(await api.editField(session.session_id, id, value)); }
+          catch (caught) { setError(caught instanceof Error ? caught.message : "That correction could not be saved."); throw caught; }
+        }}
+        onSubmit={() => run(() => api.confirm(session.session_id), "Submission failed. Please review and retry.")}
+        busy={busy}
+        hindi={hindi}
+        photoAdded={session.image_decision === "added"}
+      />;
+    }
   }
 
   return (
@@ -130,10 +154,16 @@ export default function App() {
       </a>
       <UtilityBar hindi={hindi} onLanguage={() => setHindi((value) => !value)} onFont={setFontStep} fontStep={fontStep} />
       <Tricolor />
-      <Masthead hindi={hindi} stateLabel={stateLabel || session.state} onReset={() => run(() => api.reset(session.session_id), "Reset failed.")} busy={busy} />
+      <Masthead
+        hindi={hindi}
+        stateLabel={stateLabel || session?.state || "Tracking"}
+        onReset={() => session && run(() => api.reset(session.session_id), "Reset failed.")}
+        busy={busy}
+        showReset={!onTrackPage}
+      />
       <nav className="gov-nav" aria-label="Primary">
-        <a href="#main" aria-current="page">{hindi ? "शिकायत दर्ज करें" : "Lodge grievance"}</a>
-        <span>{hindi ? "आवेदन ट्रैक करें" : "Track application"}</span>
+        <a href="/" aria-current={onTrackPage ? undefined : "page"} onClick={(event) => { event.preventDefault(); go("/"); }}>{hindi ? "शिकायत दर्ज करें" : "Lodge grievance"}</a>
+        <a href="/track" aria-current={onTrackPage ? "page" : undefined} onClick={(event) => { event.preventDefault(); go("/track"); }}>{hindi ? "आवेदन ट्रैक करें" : "Track application"}</a>
         <span>{hindi ? "सेवाएँ" : "Services"}</span>
         <span>{hindi ? "सहायता" : "Helpline"}</span>
       </nav>
@@ -143,44 +173,55 @@ export default function App() {
           : "Prototype only — not an official government website. No department, payment, Aadhaar, or OTP system is connected. All data is synthetic."}
       </p>
       <main id="main" className="page">
-        <p className="breadcrumb">
-          {hindi ? "मुख्य पृष्ठ" : "Home"} / {hindi ? "नागरिक सेवाएँ" : "Citizen services"} / <strong>{hindi ? "शिकायत दर्ज करें" : "Lodge grievance"}</strong>
-        </p>
-        <header className="page-title">
-          <div>
-            <h1>{hindi ? "ऑनलाइन नागरिक शिकायत" : "Online civic grievance"}</h1>
-            <p>{hindi ? "सामान्य भाषा में बताएँ। सहायक आवश्यक विवरण एकत्र कर समीक्षा फॉर्म दिखाएगा।" : "Describe the issue in plain language. The assistant fills the statutory fields and asks you to confirm before acknowledgement."}</p>
-          </div>
-          <dl className="app-meta">
-            <div>
-              <dt>{hindi ? "आवेदन संदर्भ" : "Application ref."}</dt>
-              <dd>{session.session_id.slice(0, 8).toUpperCase()}</dd>
+        {onTrackPage ? (
+          <TrackPage hindi={hindi} initialSrId={session?.receipt?.reference || ""} />
+        ) : session ? (
+          <>
+            <p className="breadcrumb">
+              {hindi ? "मुख्य पृष्ठ" : "Home"} / {hindi ? "नागरिक सेवाएँ" : "Citizen services"} / <strong>{hindi ? "शिकायत दर्ज करें" : "Lodge grievance"}</strong>
+            </p>
+            <header className="page-title">
+              <div>
+                <h1>{hindi ? "ऑनलाइन नागरिक शिकायत" : "Online civic grievance"}</h1>
+                <p>{hindi ? "सामान्य भाषा में बताएँ। सहायक आवश्यक विवरण एकत्र कर समीक्षा फॉर्म दिखाएगा।" : "Describe the issue in plain language. The assistant fills the statutory fields and asks you to confirm before acknowledgement."}</p>
+              </div>
+              <dl className="app-meta">
+                <div>
+                  <dt>{hindi ? "आवेदन संदर्भ" : "Application ref."}</dt>
+                  <dd>{session.session_id.slice(0, 8).toUpperCase()}</dd>
+                </div>
+                <div>
+                  <dt>{hindi ? "स्थिति" : "Status"}</dt>
+                  <dd>{stateLabel}</dd>
+                </div>
+              </dl>
+            </header>
+            {error && <p className="error" role="alert">{error}</p>}
+            <div className="workspace">
+              <div>
+                <ChatPanel
+                  messages={messages}
+                  onSend={send}
+                  busy={busy}
+                  hindi={hindi}
+                  showSuggestions={session.state === "IDLE"}
+                  contextualStep={contextualStep}
+                  composerEnabled={!session.service_id}
+                  mediaUrl={(mediaId) => mediaUrl(session.session_id, mediaId)}
+                />
+                {session.state === "COMPLETED" && session.receipt && (
+                  <ReceiptPanel
+                    receipt={session.receipt}
+                    onReset={() => run(() => api.reset(session.session_id), "Reset failed.")}
+                    onTrack={() => go("/track")}
+                    hindi={hindi}
+                  />
+                )}
+              </div>
+              <FieldPanel service={session.service?.name} fields={session.fields} hindi={hindi} stateLabel={stateLabel || session.state} />
             </div>
-            <div>
-              <dt>{hindi ? "स्थिति" : "Status"}</dt>
-              <dd>{stateLabel}</dd>
-            </div>
-          </dl>
-        </header>
-        {error && <p className="error" role="alert">{error}</p>}
-        <div className="workspace">
-          <div>
-            <ChatPanel
-              messages={messages}
-              onSend={send}
-              busy={busy}
-              hindi={hindi}
-              showSuggestions={session.state === "IDLE"}
-              contextualStep={contextualStep}
-              composerEnabled={!session.service_id}
-              mediaUrl={(mediaId) => mediaUrl(session.session_id, mediaId)}
-            />
-            {session.state === "COMPLETED" && session.receipt && (
-              <ReceiptPanel receipt={session.receipt} onReset={() => run(() => api.reset(session.session_id), "Reset failed.")} hindi={hindi} />
-            )}
-          </div>
-          <FieldPanel service={session.service?.name} fields={session.fields} hindi={hindi} stateLabel={stateLabel || session.state} />
-        </div>
+          </>
+        ) : null}
       </main>
       <footer className="gov-footer">
         <div>
@@ -241,11 +282,13 @@ function Masthead({
   stateLabel,
   onReset,
   busy,
+  showReset = true,
 }: {
   hindi: boolean;
   stateLabel: string;
   onReset: () => void;
   busy: boolean;
+  showReset?: boolean;
 }) {
   return (
     <header className="masthead">
@@ -259,7 +302,7 @@ function Masthead({
       </div>
       <div className="masthead-actions">
         <p className="live-status">{stateLabel}</p>
-        <button type="button" onClick={onReset} disabled={busy}>{hindi ? "आवेदन रीसेट" : "Reset application"}</button>
+        {showReset && <button type="button" onClick={onReset} disabled={busy}>{hindi ? "आवेदन रीसेट" : "Reset application"}</button>}
       </div>
     </header>
   );

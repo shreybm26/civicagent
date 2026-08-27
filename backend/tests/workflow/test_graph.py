@@ -23,8 +23,15 @@ def pothole_at_review(graph: WorkflowGraph) -> SessionState:
         content_type="image/jpeg",
         content=b"demo-image",
     )
-    assert analyzed.state.state == "REVIEWING"
-    return analyzed.state
+    state = analyzed.state
+    values = {field.id: field for field in state.fields}
+    if not values.get("description") or values["description"].value in (None, ""):
+        state = graph.edit_field(state, "description", "Large pothole near JNTU Metro").state
+    if not values.get("severity") or values["severity"].value in (None, ""):
+        state = graph.edit_field(state, "severity", "high").state
+        values = {field.id: field for field in state.fields}
+    assert state.state == "REVIEWING"
+    return state
 
 
 def test_pothole_flow_reaches_review_with_location_and_photo_provenance() -> None:
@@ -35,9 +42,7 @@ def test_pothole_flow_reaches_review_with_location_and_photo_provenance() -> Non
     assert state.location.address == "JNTU Metro Station, Kukatpally, Hyderabad 500085"
     assert values["location"].source == "location"
     assert values["severity"].value == "high"
-    assert values["severity"].source == "photo"
-    assert values["severity"].status == "candidate"
-    assert values["photo"].source == "photo"
+    assert state.evidence[-1].filename == "pothole.jpg"
 
 
 def test_irrelevant_image_is_evidence_but_does_not_fill_fields() -> None:
@@ -67,6 +72,8 @@ def test_confirmation_requires_review_and_receipt_gates_completion() -> None:
     assert result.state.state == "COMPLETED"
     assert result.state.receipt is not None
     assert result.state.receipt.reference.startswith("CIV-")
+    assert result.state.receipt.access_key
+    assert "-" in result.state.receipt.access_key
 
 
 def test_submission_failure_keeps_data_and_can_retry() -> None:

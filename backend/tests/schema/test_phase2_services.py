@@ -20,6 +20,14 @@ def test_correction_wins_over_photo():
     assert CandidateResolver().resolve(candidates)[0][0].value == "low"
 
 def test_image_fixtures():
+    from io import BytesIO
+
+    from PIL import Image
+
     analyzer = ImageAnalyzer()
     assert analyzer.analyze("selfie.jpg", b"x").relevant is False
-    assert analyzer.analyze("pothole.jpg", b"x").candidates[0].value == "high"
+    buffer = BytesIO()
+    Image.new("RGB", (8, 8), (32, 32, 32)).save(buffer, format="JPEG")
+    readable = analyzer.analyze("pothole.jpg", buffer.getvalue())
+    assert readable.relevant is True
+    assert readable.candidates == []

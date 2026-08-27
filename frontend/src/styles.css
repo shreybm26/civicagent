@@ -85,7 +85,7 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
-.masthead button, .composer button, .review button, .receipt button, .location button, .chips button {
+.masthead button, .composer button, .review button, .receipt button, .location button, .chips button, .track button {
   border: 1px solid #afbbc5;
   border-radius: 2px;
   background: #fff;
@@ -139,7 +139,7 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
 .app-meta dd { margin: 4px 0 0; font-weight: 700; font-family: ui-monospace, monospace; }
 
 .workspace { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(280px, 1fr); gap: 18px; }
-.chat, .fields, .evidence, .review, .receipt, .location {
+.chat, .fields, .evidence, .review, .receipt, .location, .track {
   background: var(--card);
   border: 1px solid var(--line);
   box-shadow: 0 1px 0 #fff inset;
@@ -180,7 +180,7 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
   border: 1px solid #7f8c98;
   border-radius: 2px;
 }
-button.primary, .composer button.primary, .location .primary, .review .primary {
+button.primary, .composer button.primary, .location .primary, .review .primary, .track .primary {
   background: #c45c00;
   color: #fff;
   border-color: #a34c00;
@@ -219,6 +219,22 @@ button.primary, .composer button.primary, .location .primary, .review .primary {
 .receipt dt { color: var(--muted); }
 .receipt dd { margin: 0; font-weight: 700; }
 .receipt button { margin: 0 16px 16px; }
+.credential { margin: 8px 0 4px; }
+.credential .reference { padding-bottom: 0; }
+.credential button { margin: 8px 16px 0; }
+.credential small { display: block; color: #8a5d19; padding: 8px 16px 0; }
+.credential-label { margin: 8px 16px 0; color: var(--muted); font-size: 12px; font-weight: 700; text-transform: uppercase; }
+.receipt-actions { display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 8px; }
+.receipt-actions button { margin: 0 0 16px 16px; }
+.track { background: var(--card); border: 1px solid var(--line); margin-bottom: 16px; }
+.track-form { display: grid; gap: 8px; padding: 16px; }
+.track-form input { padding: 11px; border: 1px solid #7f8c98; border-radius: 2px; font-family: ui-monospace, monospace; }
+.track-form label { font-weight: 700; }
+.track-form .primary { justify-self: start; margin-top: 8px; }
+.track-timeline { margin: 0 16px 16px; padding-left: 20px; }
+.track-timeline li { margin: 0 0 10px; color: var(--muted); }
+.track-timeline li.done { color: var(--ink); }
+.track-timeline strong { display: block; color: var(--navy); }
 .coordinate-box {
   margin: 12px 16px;
   min-height: 88px;

@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .api_entry import build_api_router
 from .config import PROJECT_ROOT, Settings, settings
+from .grievance_store import build_grievance_store
 from .provider_gemini import build_workflow_ports
 from .provider_stub import ConversationProvider
 from .store import SessionStore
@@ -49,6 +50,11 @@ def create_app(runtime_settings: Settings = settings) -> FastAPI:
     app = FastAPI(title="CivicAgent API", version="0.2.0")
     store = SessionStore(max_sessions=runtime_settings.max_sessions)
     media_store = MediaStore(runtime_settings.media_database_path)
+    grievance_store = build_grievance_store(
+        database_path=runtime_settings.grievance_database_path,
+        supabase_url=runtime_settings.supabase_url,
+        supabase_service_role_key=runtime_settings.supabase_service_role_key,
+    )
     provider = ConversationProvider()
     schemas, router, collector, image_service = build_workflow_ports(runtime_settings)
     workflow = WorkflowGraph(
@@ -56,6 +62,8 @@ def create_app(runtime_settings: Settings = settings) -> FastAPI:
         router=router,
         collector=collector,
         image_service=image_service,
+        grievance_store=grievance_store,
+        tracking_pepper=runtime_settings.tracking_pepper,
     )
 
     app.add_middleware(
@@ -72,6 +80,7 @@ def create_app(runtime_settings: Settings = settings) -> FastAPI:
             settings=runtime_settings,
             graph=workflow,
             media_store=media_store,
+            grievance_store=grievance_store,
         )
     )
     _mount_frontend(app)
@@ -79,6 +88,7 @@ def create_app(runtime_settings: Settings = settings) -> FastAPI:
     app.state.conversation_provider = provider
     app.state.workflow = workflow
     app.state.media_store = media_store
+    app.state.grievance_store = grievance_store
     return app
 
 

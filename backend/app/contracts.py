@@ -119,6 +119,7 @@ class Receipt(ContractModel):
     status: str = Field(min_length=1)
     department: str | None = None
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    access_key: str | None = None
 
 
 class CivicError(ContractModel):
@@ -235,6 +236,42 @@ class FieldEditIn(ContractModel):
 
 class ConfirmIn(ContractModel):
     confirmed: bool
+
+
+class TrackIn(ContractModel):
+    sr_id: str = Field(min_length=3, max_length=64)
+    access_key: str = Field(min_length=8, max_length=64)
+
+    @field_validator("sr_id")
+    @classmethod
+    def normalize_sr_id(cls, value: str) -> str:
+        value = " ".join(value.strip().upper().split())
+        if not value:
+            raise ValueError("service request id cannot be empty")
+        return value
+
+    @field_validator("access_key")
+    @classmethod
+    def normalize_access_key(cls, value: str) -> str:
+        value = value.strip().upper().replace(" ", "")
+        if not value:
+            raise ValueError("access key cannot be empty")
+        return value
+
+
+class TrackingField(ContractModel):
+    id: str = Field(min_length=1)
+    value: Any = None
+
+
+class TrackingView(ContractModel):
+    sr_id: str
+    status: str
+    department: str | None = None
+    service_id: str | None = None
+    submitted_at: datetime
+    location: str | None = None
+    fields: list[TrackingField] = Field(default_factory=list)
 
 
 def idle_session(session_id: UUID) -> SessionState:

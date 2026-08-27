@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import secrets
 from uuid import UUID
 
 from ..contracts import Receipt
+
+_ID_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
 
 class MockBackendError(RuntimeError):
@@ -33,7 +36,8 @@ class MockCivicBackend:
             raise MockBackendError("The civic request payload was empty.")
         self._sequence += 1
         timestamp = datetime.now(timezone.utc)
-        reference = f"{id_prefix}-{timestamp:%Y%m%d}-{self._sequence:04d}"
+        nonce = "".join(secrets.choice(_ID_ALPHABET) for _ in range(4))
+        reference = f"{id_prefix}-{timestamp:%Y%m%d}-{self._sequence:04d}-{nonce}"
         return Receipt(
             reference=reference,
             status="Received",

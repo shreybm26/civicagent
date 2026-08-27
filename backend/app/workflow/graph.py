@@ -23,6 +23,12 @@ from ..contracts import (
     ValidationResult,
     session_view,
 )
+from ..grievance_store import (
+    GrievanceStore,
+    GrievanceStoreError,
+    MemoryGrievanceStore,
+    persist_submission,
+)
 from ..mock_backend.civic_api import MockCivicBackend
 from ..policy.confirmation import apply_confirmation, can_confirm
 from ..policy.guardrails import (
@@ -52,6 +58,8 @@ class WorkflowGraph:
         router: RouterPort | None = None,
         collector: CollectorPort | None = None,
         image_service: ImagePort | None = None,
+        grievance_store: GrievanceStore | None = None,
+        tracking_pepper: str = "civicagent-demo-tracking",
     ) -> None:
         self.schemas = dict(schemas or RegistrySchemaAdapter().as_graph_schemas())
         if set(self.schemas) != {
@@ -68,6 +76,8 @@ class WorkflowGraph:
         self.router = router or SchemaRouterAdapter(self.schemas)
         self.collector = collector or SchemaCollectorAdapter()
         self.image_service = image_service or ImageAnalyzerAdapter()
+        self.grievance_store = grievance_store or MemoryGrievanceStore()
+        self.tracking_pepper = tracking_pepper
 
     def view(self, state: SessionState, *, message: str | None = None) -> SessionView:
         schema = self.schema_for(state)
@@ -274,22 +284,35 @@ class WorkflowGraph:
         next_state.state = transition(next_state.state, "citizen_confirms")
         try:
             receipt = submit_state(next_state, schema, self.backend, confirmed=confirmed)
-        except SubmissionError as exc:
+            access_key = persist_submission(
+                self.grievance_store,
+                state=next_state,
+                service_id=schema.service_id,
+                department=schema.department,
+                receipt=receipt,
+                pepper=self.tracking_pepper,
+            )
+        except (SubmissionError, GrievanceStoreError) as exc:
+            retryable = True if isinstance(exc, GrievanceStoreError) else exc.retryable
             next_state.state = transition(next_state.state, "backend_error")
-            next_state.error = CivicError(code="SUBMISSION_FAILED", message=str(exc), retryable=exc.retryable)
+            next_state.error = CivicError(code="SUBMISSION_FAILED", message=str(exc), retryable=retryable)
             return WorkflowResult(
                 state=next_state,
                 message=str(exc),
                 event="backend_error",
-                metadata={"retryable": exc.retryable, "redacted_event": redacted_event(next_state, "backend_error")},
+                metadata={"retryable": retryable, "redacted_event": redacted_event(next_state, "backend_error")},
             )
 
+        receipt.access_key = access_key
         next_state.receipt = receipt
         next_state.error = None
         next_state.state = transition(next_state.state, "receipt")
         return WorkflowResult(
             state=next_state,
-            message=f"Complaint submitted successfully. Reference: {receipt.reference}",
+            message=(
+                f"Complaint submitted successfully. Service request {receipt.reference}. "
+                "Save the access key on the acknowledgement to track this request."
+            ),
             event="receipt",
             metadata={"reference": receipt.reference, "redacted_event": redacted_event(next_state, "receipt")},
         )

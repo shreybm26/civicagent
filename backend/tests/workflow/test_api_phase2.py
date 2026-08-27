@@ -1,3 +1,6 @@
+from pathlib import Path
+import tempfile
+
 from fastapi.testclient import TestClient
 
 from app.config import Settings
@@ -5,7 +8,16 @@ from app.main import create_app
 
 
 def build_client() -> TestClient:
-    return TestClient(create_app())
+    database = Path(tempfile.mkdtemp()) / "grievances.db"
+    return TestClient(
+        create_app(
+            Settings(
+                grievance_database_path=database,
+                supabase_url="",
+                supabase_service_role_key="",
+            )
+        )
+    )
 
 
 def test_full_pothole_api_path_and_schema_switch() -> None:
@@ -27,12 +39,20 @@ def test_full_pothole_api_path_and_schema_switch() -> None:
     assert located.status_code == 200
     assert located.json()["location"]["source"] == "curated_location"
 
-    media = client.post(
-        f"/api/session/{session_id}/media",
-        files={"media": ("pothole.jpg", b"demo-image", "image/jpeg")},
+    client.post(
+        f"/api/session/{session_id}/media/decision",
+        json={"has_image": False},
     )
-    assert media.status_code == 200
-    assert media.json()["state"] == "REVIEWING"
+    client.patch(
+        f"/api/session/{session_id}/fields/description",
+        json={"value": "Large pothole near JNTU Metro"},
+    )
+    ready = client.patch(
+        f"/api/session/{session_id}/fields/severity",
+        json={"value": "high"},
+    )
+    assert ready.status_code == 200
+    assert ready.json()["state"] == "REVIEWING"
 
     denied = client.post(
         f"/api/session/{session_id}/confirm",
@@ -46,7 +66,25 @@ def test_full_pothole_api_path_and_schema_switch() -> None:
     )
     assert completed.status_code == 200
     assert completed.json()["state"] == "COMPLETED"
-    assert completed.json()["receipt"]["reference"].startswith("CIV-")
+    receipt = completed.json()["receipt"]
+    assert receipt["reference"].startswith("CIV-")
+    assert receipt["access_key"]
+
+    tracked = client.post(
+        "/api/track",
+        json={"sr_id": receipt["reference"], "access_key": receipt["access_key"]},
+    )
+    assert tracked.status_code == 200
+    assert tracked.json()["sr_id"] == receipt["reference"]
+    assert tracked.json()["status"] == "Received"
+    assert "access_key" not in tracked.json()
+    assert "key_hash" not in tracked.json()
+
+    denied_track = client.post(
+        "/api/track",
+        json={"sr_id": receipt["reference"], "access_key": "NOPE-NOPE-NOPE"},
+    )
+    assert denied_track.status_code == 401
 
     switched = client.post(
         f"/api/session/{session_id}/message",

@@ -62,6 +62,15 @@ class Settings:
     media_database_path: Path = Path(
         os.getenv("MEDIA_DATABASE_PATH", str(PROJECT_ROOT / "backend" / "data" / "civicagent-media.db"))
     )
+    grievance_database_path: Path = Path(
+        os.getenv(
+            "GRIEVANCE_DATABASE_PATH",
+            str(PROJECT_ROOT / "backend" / "data" / "civicagent-grievances.db"),
+        )
+    )
+    supabase_url: str = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
+    supabase_service_role_key: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    tracking_pepper: str = os.getenv("TRACKING_PEPPER", "civicagent-demo-tracking").strip() or "civicagent-demo-tracking"
     image_confidence_threshold: float = _float_env("IMAGE_CONFIDENCE_THRESHOLD", 0.7)
     schema_count: int = 5
 

@@ -10,7 +10,13 @@ from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from fastapi.responses import Response
 
 from .config import Settings
-from .contracts import CivicError, ConfirmIn, FieldEditIn, LocationIn, LocationResult, MediaDecisionIn, Message, MessageIn, SessionView
+from .contracts import CivicError, ConfirmIn, FieldEditIn, LocationIn, LocationResult, MediaDecisionIn, Message, MessageIn, SessionView, TrackIn, TrackingView
+from .grievance_store import (
+    GrievanceStore,
+    GrievanceStoreError,
+    access_key_matches,
+    tracking_view_from_record,
+)
 from .media_store import MediaNotFound, MediaStore
 from .provider_stub import ConversationProvider
 from .store import SessionNotFound, SessionStore
@@ -27,6 +33,7 @@ def build_api_router(
     settings: Settings,
     graph: WorkflowGraph,
     media_store: MediaStore,
+    grievance_store: GrievanceStore,
 ) -> APIRouter:
     """Create route adapters around the shared store and workflow ports."""
 
@@ -45,6 +52,7 @@ def build_api_router(
             "gemini_enabled": settings.provider_mode in {"gemini", "llm", "auto"} and bool(settings.gemini_api_key),
             "gemini_model": settings.gemini_model if settings.gemini_api_key else None,
             "gemini_timeout_seconds": settings.gemini_timeout_seconds,
+            "tracking_store": grievance_store.backend_name,
         }
 
     @router.post("/api/session", response_model=SessionView, status_code=status.HTTP_200_OK)
@@ -153,6 +161,26 @@ def build_api_router(
         except WorkflowError as exc:
             raise _workflow_error(exc) from exc
         return _persist_result(store, graph, result)
+
+    @router.post("/api/track", response_model=TrackingView)
+    def track_grievance(body: TrackIn) -> TrackingView:
+        try:
+            record = grievance_store.get(body.sr_id)
+        except GrievanceStoreError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=_error("TRACK_UNAVAILABLE", str(exc), True),
+            ) from exc
+        if record is None or not access_key_matches(body.access_key, record.key_hash, settings.tracking_pepper):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=_error(
+                    "TRACK_NOT_FOUND",
+                    "Service request not found or access key is incorrect.",
+                    False,
+                ),
+            )
+        return tracking_view_from_record(record)
 
     return router
 
