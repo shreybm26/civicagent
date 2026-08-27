@@ -77,6 +77,11 @@ class Settings:
     tracking_pepper: str = os.getenv("TRACKING_PEPPER", "civicagent-demo-tracking").strip() or "civicagent-demo-tracking"
     resend_api_key: str = os.getenv("RESEND_API_KEY", "").strip()
     resend_from: str = os.getenv("RESEND_FROM", "CivicAgent Demo <onboarding@resend.dev>").strip()
+    smtp_host: str = os.getenv("SMTP_HOST", "smtp.gmail.com").strip() or "smtp.gmail.com"
+    smtp_port: int = _int_env("SMTP_PORT", 587)
+    smtp_username: str = os.getenv("SMTP_USERNAME", "").strip()
+    smtp_password: str = os.getenv("SMTP_PASSWORD", "").strip()
+    smtp_from: str = os.getenv("SMTP_FROM", "").strip()
     public_base_url: str = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
     image_confidence_threshold: float = _float_env("IMAGE_CONFIDENCE_THRESHOLD", 0.7)
     schema_count: int = 5
@@ -90,6 +95,18 @@ class Settings:
             "water_issue",
             "sanitation_issue",
         )
+
+    @property
+    def mail_configured(self) -> bool:
+        return bool(self.smtp_username and self.smtp_password) or bool(self.resend_api_key)
+
+    @property
+    def mail_backend(self) -> str:
+        if self.smtp_username and self.smtp_password:
+            return "smtp"
+        if self.resend_api_key:
+            return "resend"
+        return "none"
 
 
 settings = Settings()

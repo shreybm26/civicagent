@@ -149,6 +149,8 @@ def _settings(tmp_path: Path, **overrides: object) -> Settings:
         "supabase_service_role_key": "",
         "tracking_pepper": PEPPER,
         "resend_api_key": "",
+        "smtp_username": "",
+        "smtp_password": "",
         "public_base_url": "https://civicagent.example",
     }
     values.update(overrides)
@@ -246,6 +248,73 @@ def test_track_email_explains_resend_test_sender_limit(tmp_path: Path) -> None:
     assert denied.status_code == 422
     assert "account owner's inbox" in denied.json()["detail"]["message"]
     assert "gmail.com" not in denied.text.lower()
+
+
+class _FakeSMTP:
+    def __init__(self, host, port, timeout=None):
+        self.host = host
+        self.port = port
+        self.login_user = None
+        self.sent = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def starttls(self):
+        return None
+
+    def login(self, username, password):
+        self.login_user = username
+
+    def sendmail(self, from_addr, to_addrs, msg):
+        self.sent = (from_addr, list(to_addrs), msg)
+
+
+def test_track_email_sends_via_smtp_to_any_inbox(tmp_path: Path) -> None:
+    client = TestClient(
+        create_app(
+            _settings(
+                tmp_path,
+                resend_api_key="re_should_not_be_used",
+                smtp_username="civicagent.demo@gmail.com",
+                smtp_password="app-password",
+                smtp_from="CivicAgent Demo <civicagent.demo@gmail.com>",
+            )
+        )
+    )
+    receipt = _lodge_pothole(client)
+    created: list[_FakeSMTP] = []
+
+    def smtp_factory(host, port, timeout=None):
+        server = _FakeSMTP(host, port, timeout)
+        created.append(server)
+        return server
+
+    with patch("app.mailer.smtplib.SMTP", smtp_factory), patch("app.mailer.httpx.post") as posted:
+        sent = client.post(
+            "/api/track/email",
+            json={
+                "sr_id": receipt["reference"],
+                "access_key": receipt["access_key"],
+                "email": "teammate@example.com",
+                "confirm_send": True,
+            },
+        )
+    assert sent.status_code == 200
+    assert sent.json() == {"sent": True, "to": "teammate@example.com"}
+    posted.assert_not_called()
+    assert created
+    server = created[0]
+    assert server.host == "smtp.gmail.com"
+    assert server.login_user == "civicagent.demo@gmail.com"
+    assert server.sent is not None
+    from_addr, to_addrs, raw = server.sent
+    assert from_addr == "civicagent.demo@gmail.com"
+    assert to_addrs == ["teammate@example.com"]
+    assert receipt["reference"] in raw
 
 
 def test_sqlite_list_recent_returns_newest_first(tmp_path: Path) -> None:

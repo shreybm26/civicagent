@@ -65,23 +65,29 @@ The access key is shown **once** on the receipt. Only a SHA-256 HMAC of it is st
 
 The track page also shows a **demonstration neighbourhood picture**: counts by issue type, synthetic nearby samples labelled as demo (not live ULB data), plus other tickets filed in this prototype within about 2 km. The timeline stops at “awaiting ward assignment” on purpose.
 
-## Email the acknowledgement (Resend)
+## Email the acknowledgement
 
 After submit, citizens can email themselves the service request ID, access key, and tracking link. The API will not send until they tick confirm — a typo would leak the key. This is demonstration mail, not a department notice.
 
-1. Create a [Resend](https://resend.com) account and copy an API key.
-2. For anyone other than the Resend account owner, verify a domain and send from that address. `onboarding@resend.dev` only delivers to the account owner.
-3. In Railway → Variables, add:
+**Use Gmail SMTP if anyone besides you needs to receive the mail** (teammates, judges). Resend's `onboarding@resend.dev` test sender can only deliver to the Resend account owner.
+
+1. In Google Account → Security, turn on 2-Step Verification, then create an [App password](https://myaccount.google.com/apppasswords) for Mail. Do **not** use your normal Gmail password.
+2. In Railway → Variables, add:
 
    | Name | Value |
    | --- | --- |
-   | `RESEND_API_KEY` | `re_…` from Resend |
-   | `RESEND_FROM` | `CivicAgent Demo <onboarding@resend.dev>` (test sender; only the Resend account owner receives mail until you verify a domain) |
+   | `SMTP_USERNAME` | your Gmail address |
+   | `SMTP_PASSWORD` | the 16-character app password |
+   | `SMTP_FROM` | `CivicAgent Demo <your-gmail@gmail.com>` |
+   | `SMTP_HOST` | `smtp.gmail.com` (optional; this is the default) |
+   | `SMTP_PORT` | `587` (optional; this is the default) |
    | `PUBLIC_BASE_URL` | your Railway `https://…` URL (optional if the request host is already that URL) |
 
-4. Confirm `/health` includes `"mail_configured": true`. Lodge a grievance, tick the confirm checkbox, and send a test to your inbox.
+3. Confirm `/health` includes `"mail_configured": true` and `"mail_backend":"smtp"`. Lodge a grievance and send a test to someone else's inbox.
 
-Without `RESEND_API_KEY`, tracking still works; send returns a clear “not configured” error.
+Resend remains optional. If only `RESEND_API_KEY` is set with `onboarding@resend.dev`, mail still works for the account owner and tracking still works for everyone else.
+
+Without SMTP or Resend, tracking still works; send returns a clear “not configured” error.
 
 ## Deploy (public URL)
 
@@ -106,8 +112,9 @@ Do not put the API on Vercel. Vercel functions are stateless; creating a session
    | `SUPABASE_URL` | your Supabase project URL (see **Track a grievance** above) |
    | `SUPABASE_SERVICE_ROLE_KEY` | Supabase `service_role` secret (backend only) |
    | `TRACKING_PEPPER` | random string used to hash access keys |
-   | `RESEND_API_KEY` | Resend API key (optional; needed to email acknowledgements) |
-   | `RESEND_FROM` | `CivicAgent Demo <onboarding@resend.dev>` |
+   | `SMTP_USERNAME` | Gmail address used to send acknowledgements to any inbox |
+   | `SMTP_PASSWORD` | Gmail app password (not the account password) |
+   | `SMTP_FROM` | `CivicAgent Demo <your-gmail@gmail.com>` |
    | `PUBLIC_BASE_URL` | public `https://…` URL for links in the email (optional) |
 
    Leave `VITE_API_URL` unset. Do not add `GEMINI_API_KEY` for the contest demo. Never add `SUPABASE_SERVICE_ROLE_KEY` to the frontend.

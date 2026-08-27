@@ -69,7 +69,8 @@ def build_api_router(
             "gemini_model": settings.gemini_model if settings.gemini_api_key else None,
             "gemini_timeout_seconds": settings.gemini_timeout_seconds,
             "tracking_store": grievance_store.backend_name,
-            "mail_configured": bool(settings.resend_api_key),
+            "mail_configured": settings.mail_configured,
+            "mail_backend": settings.mail_backend,
         }
 
     @router.post("/api/session", response_model=SessionView, status_code=status.HTTP_200_OK)
@@ -201,12 +202,17 @@ def build_api_router(
         try:
             to_email = normalize_email(body.email)
             send_acknowledgement(
-                api_key=settings.resend_api_key,
-                from_address=settings.resend_from,
                 to_email=to_email,
                 view=view,
                 access_key=body.access_key,
                 track_url=_public_track_url(request, settings),
+                resend_api_key=settings.resend_api_key,
+                resend_from=settings.resend_from,
+                smtp_host=settings.smtp_host,
+                smtp_port=settings.smtp_port,
+                smtp_username=settings.smtp_username,
+                smtp_password=settings.smtp_password,
+                smtp_from=settings.smtp_from,
             )
         except MailError as exc:
             message = str(exc)

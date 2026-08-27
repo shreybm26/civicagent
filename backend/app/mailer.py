@@ -1,9 +1,13 @@
-"""Send a demonstration acknowledgement email via Resend."""
+"""Send a demonstration acknowledgement email via SMTP or Resend."""
 
 from __future__ import annotations
 
 import html
 import re
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.utils import formataddr, parseaddr
 
 import httpx
 
@@ -22,6 +26,10 @@ def normalize_email(value: str) -> str:
     if not EMAIL_RE.match(email) or len(email) > 254:
         raise MailError("Enter a valid email address.")
     return email
+
+
+def smtp_configured(username: str, password: str) -> bool:
+    return bool(username.strip() and password.strip())
 
 
 def _field_lines(fields: list[TrackingField]) -> str:
@@ -77,17 +85,93 @@ def build_acknowledgement_bodies(
 
 def send_acknowledgement(
     *,
-    api_key: str,
-    from_address: str,
     to_email: str,
     view: TrackingView,
     access_key: str,
     track_url: str,
+    resend_api_key: str = "",
+    resend_from: str = "",
+    smtp_host: str = "",
+    smtp_port: int = 587,
+    smtp_username: str = "",
+    smtp_password: str = "",
+    smtp_from: str = "",
 ) -> None:
-    if not api_key.strip():
-        raise MailError("Email sending is not configured on this server.")
     to_email = normalize_email(to_email)
     text, html_body = build_acknowledgement_bodies(view=view, access_key=access_key, track_url=track_url)
+    subject = f"Demo acknowledgement {view.sr_id}"
+    if smtp_configured(smtp_username, smtp_password):
+        _send_via_smtp(
+            host=smtp_host or "smtp.gmail.com",
+            port=smtp_port or 587,
+            username=smtp_username,
+            password=smtp_password,
+            from_address=_smtp_from(smtp_from, smtp_username),
+            to_email=to_email,
+            subject=subject,
+            text=text,
+            html_body=html_body,
+        )
+        return
+    if resend_api_key.strip():
+        _send_via_resend(
+            api_key=resend_api_key,
+            from_address=resend_from,
+            to_email=to_email,
+            subject=subject,
+            text=text,
+            html_body=html_body,
+        )
+        return
+    raise MailError("Email sending is not configured on this server.")
+
+
+def _smtp_from(explicit: str, username: str) -> str:
+    if explicit.strip():
+        return explicit.strip()
+    return formataddr(("CivicAgent Demo", username.strip()))
+
+
+def _send_via_smtp(
+    *,
+    host: str,
+    port: int,
+    username: str,
+    password: str,
+    from_address: str,
+    to_email: str,
+    subject: str,
+    text: str,
+    html_body: str,
+) -> None:
+    message = MIMEMultipart("alternative")
+    message["Subject"] = subject
+    message["From"] = from_address
+    message["To"] = to_email
+    message.attach(MIMEText(text, "plain", "utf-8"))
+    message.attach(MIMEText(html_body, "html", "utf-8"))
+    _, envelope_from = parseaddr(from_address)
+    envelope_from = envelope_from or username
+    try:
+        with smtplib.SMTP(host, port, timeout=20) as smtp:
+            smtp.starttls()
+            smtp.login(username, password)
+            smtp.sendmail(envelope_from, [to_email], message.as_string())
+    except smtplib.SMTPAuthenticationError as exc:
+        raise MailError("The mail service rejected the SMTP login. Check the app password.") from exc
+    except (smtplib.SMTPException, OSError) as exc:
+        raise MailError("The mail service is temporarily unavailable.") from exc
+
+
+def _send_via_resend(
+    *,
+    api_key: str,
+    from_address: str,
+    to_email: str,
+    subject: str,
+    text: str,
+    html_body: str,
+) -> None:
     try:
         response = httpx.post(
             RESEND_URL,
@@ -95,7 +179,7 @@ def send_acknowledgement(
             json={
                 "from": from_address,
                 "to": [to_email],
-                "subject": f"Demo acknowledgement {view.sr_id}",
+                "subject": subject,
                 "text": text,
                 "html": html_body,
             },

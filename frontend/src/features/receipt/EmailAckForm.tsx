@@ -52,8 +52,8 @@ export function EmailAckForm({
       <h3>{hindi ? "पावती ईमेल भेजें" : "Email this acknowledgement"}</h3>
       <p>
         {hindi
-          ? "संदेश में सेवा अनुरोध क्रमांक, प्रवेश कुंजी और ट्रैकिंग लिंक होगा। पता जाँच लें — गलत पते पर कुंजी चली जाएगी। यह सरकारी मेल नहीं है। Resend टेस्ट सेंडर केवल उसी खाते के इनबॉक्स पर भेजता है जिसने API कुंजी बनाई।"
-          : "The message includes the service request ID, access key, and a tracking link. Check the address — a typo sends the key to the wrong inbox. This is not official government mail. The Resend test sender only delivers to the account that created the API key."}
+          ? "संदेश में सेवा अनुरोध क्रमांक, प्रवेश कुंजी और ट्रैकिंग लिंक होगा। पता जाँच लें — गलत पते पर कुंजी चली जाएगी। यह सरकारी मेल नहीं है।"
+          : "The message includes the service request ID, access key, and a tracking link. Check the address — a typo sends the key to the wrong inbox. This is not official government mail."}
       </p>
       {error && (
         <p className="error" role="alert">
