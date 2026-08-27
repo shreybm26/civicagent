@@ -98,7 +98,7 @@ class LocationResult(ContractModel):
     lat: float | None = None
     lng: float | None = None
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
-    source: Literal["curated_location", "citizen"] | None = None
+    source: Literal["curated_location", "citizen", "geocoded"] | None = None
     needs_clarification: bool = False
     message: str | None = None
 
@@ -160,7 +160,7 @@ class Location(ContractModel):
     lat: float | None = None
     lng: float | None = None
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
-    source: Literal["curated_location", "citizen"] | None = None
+    source: Literal["curated_location", "citizen", "geocoded"] | None = None
 
 
 class SessionState(ContractModel):

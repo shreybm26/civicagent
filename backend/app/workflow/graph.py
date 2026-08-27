@@ -439,7 +439,8 @@ class WorkflowGraph:
         )
 
     def _resolve_location(self, state: SessionState, text: str) -> WorkflowResult:
-        result = resolve_location(text)
+        prior = state.location.query if state.location and not state.location.address else None
+        result = resolve_location(text, prior_query=prior)
         if result.address:
             self._apply_location(state, result)
             state.state = transition(state.state, "location_resolved")
@@ -451,6 +452,8 @@ class WorkflowGraph:
                 metadata={"redacted_event": redacted_event(state, "location_resolved")},
             )
         state.state = "LOCATION_REQUIRED"
+        # Keep the typed attempt so the next landmark can be geocoded with city/area context.
+        state.location = Location(query=result.query)
         return WorkflowResult(
             state=state,
             message=result.message or "Please provide a nearby landmark or area.",

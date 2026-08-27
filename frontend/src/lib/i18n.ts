@@ -112,6 +112,11 @@ const PHRASES: [string, string, string][] = [
     "यह स्थान अभी नहीं मिला। कृपया पास का स्थलचिह्न, क्षेत्र या सड़क बताएँ।",
   ],
   [
+    "I could not find that place yet. Try an area and city, or drop a pin on the map.",
+    "I could not find that place yet. Try an area and city, like Junnasandra, Bengaluru, or drop a pin on the map.",
+    "यह स्थान अभी नहीं मिला। क्षेत्र और शहर लिखें, या मानचित्र पर पिन डालें।",
+  ],
+  [
     "The image appears to be a selfie, not civic evidence.",
     "That photo looks like a selfie, not civic evidence.",
     "यह फ़ोटो सेल्फी लगती है, नागरिक साक्ष्य नहीं।",

@@ -1,3 +1,4 @@
+from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
@@ -126,3 +127,24 @@ def test_completed_session_can_start_a_different_schema() -> None:
     assert switched.state.service_id == "streetlight_issue"
     assert {field.id for field in switched.state.fields} != {"location", "description", "severity", "photo", "landmark"}
     assert switched.state.receipt is None
+
+
+def test_typed_location_outside_the_hyderabad_list_is_geocoded_and_stored() -> None:
+    graph = WorkflowGraph()
+    identified = graph.handle_message(new_state(), "There is a huge pothole and a bike almost fell")
+    hits = [
+        {
+            "lat": "12.8921",
+            "lon": "77.6954",
+            "display_name": "Junnasandra, Bengaluru, Karnataka, 560035, India",
+        }
+    ]
+    with patch("app.tools.location.nominatim_search", return_value=hits):
+        located = graph.handle_message(identified.state, "in junnasandra, bengaluru")
+
+    assert located.state.location is not None
+    assert located.state.location.source == "geocoded"
+    assert located.state.location.lat == 12.8921
+    assert located.state.location.lng == 77.6954
+    values = {field.id: field for field in located.state.fields}
+    assert "Junnasandra" in str(values["location"].value)

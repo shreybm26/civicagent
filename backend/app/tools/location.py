@@ -1,11 +1,38 @@
-"""Curated Hyderabad location resolver with deterministic fuzzy aliases."""
+"""Location resolver: curated Hyderabad aliases, then OpenStreetMap search.
+
+Typed places must not depend on an LLM inventing coordinates. The map pin
+already reverse-geocodes through Nominatim; typed chat/landmark text uses the
+same forward search so Junnasandra, Bengaluru (or any Indian place) can be stored.
+"""
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 import re
+from typing import Any
+
+import httpx
 
 from ..contracts import LocationResult
+
+NOMINATIM_SEARCH_URL = "https://nominatim.openstreetmap.org/search"
+NOMINATIM_USER_AGENT = (
+    "CivicAgent/1.0 (civic grievance prototype; https://github.com/shreybm26/civicagent)"
+)
+
+GeocodeHits = list[dict[str, Any]]
+GeocodeFn = Callable[[str], GeocodeHits]
+
+VAGUE_QUERIES = {
+    "near my house",
+    "my house",
+    "near home",
+    "home",
+    "somewhere nearby",
+    "here",
+    "nearby",
+}
 
 
 @dataclass(frozen=True)
@@ -43,13 +70,109 @@ def _normalize(value: str) -> str:
     return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9\u0900-\u097f ]", " ", value.casefold())).strip()
 
 
-def resolve_location(text: str) -> LocationResult:
+def compose_location_query(text: str, prior_query: str | None = None) -> str:
+    """Keep earlier area/city context when the citizen adds a landmark next."""
+
     query = text.strip()
+    prior = (prior_query or "").strip()
+    if not prior:
+        return query
+    if _normalize(prior) in _normalize(query):
+        return query
+    if _normalize(query) in _normalize(prior):
+        return prior
+    return f"{query}, {prior}"
+
+
+def _short_address(display_name: str) -> str:
+    parts = [part.strip() for part in display_name.split(",") if part.strip()]
+    return ", ".join(parts[:5]) if parts else display_name
+
+
+def nominatim_search(query: str) -> GeocodeHits:
+    """Forward-geocode an Indian place. Returns [] on network/parse failure."""
+
+    try:
+        response = httpx.get(
+            NOMINATIM_SEARCH_URL,
+            params={
+                "format": "jsonv2",
+                "q": query,
+                "countrycodes": "in",
+                "limit": "5",
+                "addressdetails": "1",
+            },
+            headers={
+                "User-Agent": NOMINATIM_USER_AGENT,
+                "Accept": "application/json",
+                "Accept-Language": "en-IN,en",
+            },
+            timeout=8.0,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except (httpx.HTTPError, ValueError, TypeError):
+        return []
+    return payload if isinstance(payload, list) else []
+
+
+def _geocode_hits_to_result(query: str, hits: GeocodeHits) -> LocationResult:
+    usable: list[tuple[float, float, str]] = []
+    seen: set[tuple[float, float]] = set()
+    for hit in hits:
+        try:
+            lat = float(hit["lat"])
+            lng = float(hit["lon"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        name = hit.get("display_name")
+        if not isinstance(name, str) or not name.strip():
+            continue
+        key = (round(lat, 3), round(lng, 3))
+        if key in seen:
+            continue
+        seen.add(key)
+        usable.append((lat, lng, _short_address(name)))
+
+    if not usable:
+        return LocationResult(
+            query=query,
+            needs_clarification=True,
+            message="I could not find that place yet. Try an area and city, or drop a pin on the map.",
+        )
+
+    if len(usable) > 1:
+        names = ", ".join(item[2].split(",")[0] for item in usable[:3])
+        return LocationResult(
+            query=query,
+            needs_clarification=True,
+            message=f"I found more than one possible location ({names}). Which one is correct?",
+        )
+
+    lat, lng, address = usable[0]
+    return LocationResult(
+        query=query,
+        address=address,
+        lat=lat,
+        lng=lng,
+        confidence=0.86,
+        source="geocoded",
+        message=f"I found this location: {address}. Is that correct?",
+    )
+
+
+def resolve_location(
+    text: str,
+    *,
+    prior_query: str | None = None,
+    geocode: GeocodeFn | None = None,
+) -> LocationResult:
+    query = compose_location_query(text, prior_query)
     if not query:
         return LocationResult(query="unknown", needs_clarification=True, message="Please tell me a nearby landmark or area.")
 
     normalized = _normalize(query)
-    if normalized in {"near my house", "my house", "near home", "home", "somewhere nearby"}:
+    if normalized in VAGUE_QUERIES:
         return LocationResult(query=query, needs_clarification=True, message="Please provide a recognizable landmark, area, or street.")
 
     matches = [
@@ -58,21 +181,25 @@ def resolve_location(text: str) -> LocationResult:
         if any(alias in normalized or normalized in alias for alias in map(_normalize, location.aliases))
     ]
     unique = {location.address: location for location in matches}
-    if len(unique) != 1:
-        if len(unique) > 1:
-            names = ", ".join(location.name for location in unique.values())
-            message = f"I found more than one possible location ({names}). Which one is correct?"
-        else:
-            message = "I could not match that location yet. Please provide a nearby landmark, area, or street."
-        return LocationResult(query=query, needs_clarification=True, message=message)
+    if len(unique) > 1:
+        names = ", ".join(location.name for location in unique.values())
+        return LocationResult(
+            query=query,
+            needs_clarification=True,
+            message=f"I found more than one possible location ({names}). Which one is correct?",
+        )
+    if len(unique) == 1:
+        location = next(iter(unique.values()))
+        return LocationResult(
+            query=query,
+            address=location.address,
+            lat=location.lat,
+            lng=location.lng,
+            confidence=0.98,
+            source="curated_location",
+            message=f"I found this location: {location.address}. Is that correct?",
+        )
 
-    location = next(iter(unique.values()))
-    return LocationResult(
-        query=query,
-        address=location.address,
-        lat=location.lat,
-        lng=location.lng,
-        confidence=0.98,
-        source="curated_location",
-        message=f"I found this location: {location.address}. Is that correct?",
-    )
+    if geocode is None:
+        geocode = nominatim_search
+    return _geocode_hits_to_result(query, geocode(query))
