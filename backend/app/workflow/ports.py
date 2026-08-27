@@ -88,20 +88,6 @@ class MockImageService:
         content_type: str,
         content: bytes,
     ) -> ImageResult:
-        lowered = filename.casefold()
-        if "selfie" in lowered or "portrait" in lowered or "face" in lowered:
-            return ImageResult(relevant=False, reason="The image appears to be a selfie, not civic evidence.")
-        if content_type not in {"image/jpeg", "image/png"} or not content:
-            return ImageResult(relevant=False, reason="The uploaded file is not a readable civic image.")
-        candidates: list[Candidate] = []
-        if schema.service_id == "road_issue":
-            candidates.append(
-                Candidate(
-                    field_id="severity",
-                    value="high",
-                    source="photo",
-                    confidence=0.82,
-                    reason="Suggested from visible road surface damage in the photo.",
-                )
-            )
-        return ImageResult(relevant=True, reason="The photo appears relevant to this civic issue.", candidates=candidates)
+        from ..tools.image import ImageAnalyzer
+
+        return ImageAnalyzer().analyze(filename, content)

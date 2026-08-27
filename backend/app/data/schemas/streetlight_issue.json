@@ -38,6 +38,12 @@
       "id": "time_noticed",
       "type": "text",
       "required": false
+    },
+    {
+      "id": "additional_details",
+      "type": "text",
+      "required": false,
+      "image_derivable": true
     }
   ],
   "submission": {

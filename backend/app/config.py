@@ -31,6 +31,14 @@ def _origins_env() -> tuple[str, ...]:
     return tuple(origin.strip() for origin in raw.split(",") if origin.strip())
 
 
+def _float_env(name: str, default: float) -> float:
+    try:
+        value = float(os.getenv(name, str(default)))
+    except ValueError:
+        return default
+    return min(max(value, 0.0), 1.0)
+
+
 @dataclass(frozen=True)
 class Settings:
     provider_mode: str = os.getenv("PROVIDER_MODE", "mock").strip().lower() or "mock"
@@ -39,6 +47,10 @@ class Settings:
     cors_origins: tuple[str, ...] = _origins_env()
     max_upload_bytes: int = _int_env("MAX_UPLOAD_BYTES", 10 * 1024 * 1024)
     max_sessions: int = _int_env("MAX_SESSIONS", 100)
+    media_database_path: Path = Path(
+        os.getenv("MEDIA_DATABASE_PATH", str(PROJECT_ROOT / "backend" / "data" / "civicagent-media.db"))
+    )
+    image_confidence_threshold: float = _float_env("IMAGE_CONFIDENCE_THRESHOLD", 0.7)
     schema_count: int = 5
 
     @property

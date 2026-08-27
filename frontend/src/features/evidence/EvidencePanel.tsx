@@ -1,33 +1,6 @@
-import { localizeAgentText } from "../../lib/i18n";
+import type { Evidence } from "../../lib/types";
 
-export function EvidencePanel({
-  onUpload,
-  busy,
-  result,
-  hindi,
-}: {
-  onUpload: (file: File) => void;
-  busy: boolean;
-  result?: string;
-  hindi: boolean;
-}) {
-  return (
-    <section className="evidence">
-      <div className="panel-head">
-        <span>{hindi ? "साक्ष्य" : "Supporting evidence"}</span>
-        <strong>{hindi ? "JPEG / PNG" : "JPEG or PNG only"}</strong>
-      </div>
-      <label className="upload">
-        {hindi ? "फोटो संलग्न करें" : "Attach a photograph of the issue"}
-        <input
-          type="file"
-          accept="image/jpeg,image/png"
-          disabled={busy}
-          onChange={(event) => event.target.files?.[0] && onUpload(event.target.files[0])}
-        />
-      </label>
-      {result && <p role="status">{localizeAgentText(result, hindi)}</p>}
-      <small>{hindi ? "सेल्फी स्वीकार नहीं की जाएगी।" : "Selfies are rejected. The report can continue without a photo."}</small>
-    </section>
-  );
+export function EvidencePanel({ onChoose, onUpload, busy, evidence, hindi }: { onChoose: (hasImage: boolean) => void; onUpload: (file: File) => void; busy: boolean; evidence?: Evidence; hindi: boolean }) {
+  if (evidence) return <div className="chat-step evidence-result"><h3>{evidence.relevant ? "Image analysis" : "Image not used for form fields"}</h3><p>{evidence.reason}</p>{evidence.relevant && evidence.summary && <p>{evidence.summary}</p>}{evidence.relevant && evidence.details.length > 0 && <ul>{evidence.details.map((detail) => <li key={`${detail.label}-${detail.value}`}><strong>{detail.label}:</strong> {detail.value} ({Math.round(detail.confidence * 100)}%)</li>)}</ul>}</div>;
+  return <div className="chat-step image-choice"><h3>{hindi ? "क्या आपके पास तस्वीर है?" : "Do you have a photo of the issue?"}</h3><p>{hindi ? "तस्वीर से केवल स्पष्ट और भरोसेमंद जानकारी भरी जाएगी।" : "CivicAgent will use only visible, confident information from the image."}</p><div className="step-actions"><label className="upload-button">Add image<input type="file" accept="image/jpeg,image/png" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; if (file) { onChoose(true); onUpload(file); } }}/></label><button type="button" onClick={() => onChoose(false)} disabled={busy}>No image</button></div></div>;
 }

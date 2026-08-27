@@ -51,6 +51,7 @@ def mock_service_schemas() -> dict[ServiceId, ServiceSchema]:
         field_id, "choice", required, tuple(options), image_derivable
     )
     image = lambda: SchemaField("photo", "image", False)
+    additional = lambda: SchemaField("additional_details", "text", False, image_derivable=True)
 
     return {
         "road_issue": ServiceSchema(
@@ -59,7 +60,7 @@ def mock_service_schemas() -> dict[ServiceId, ServiceSchema]:
             "Report road damage, potholes, or surface deterioration",
             "Roads & Infrastructure",
             ("pothole", "road", "crack", "damage", "pavement", "asphalt", "surface"),
-            (location(), text("description", True), choice("severity", ("low", "medium", "high"), True, True), image(), text("landmark")),
+            (location(), text("description", True), choice("severity", ("low", "medium", "high"), True, True), image(), additional(), text("landmark")),
         ),
         "garbage_issue": ServiceSchema(
             "garbage_issue",
@@ -67,7 +68,7 @@ def mock_service_schemas() -> dict[ServiceId, ServiceSchema]:
             "Report garbage accumulation or missed collection",
             "Sanitation Services",
             ("garbage", "trash", "waste", "dump", "litter"),
-            (location(), text("description", True), choice("severity", ("low", "medium", "high"), True), text("duration"), image()),
+            (location(), text("description", True), choice("severity", ("low", "medium", "high"), True), text("duration"), image(), additional()),
         ),
         "streetlight_issue": ServiceSchema(
             "streetlight_issue",
@@ -75,7 +76,7 @@ def mock_service_schemas() -> dict[ServiceId, ServiceSchema]:
             "Report a broken or inactive streetlight",
             "Electrical Services",
             ("streetlight", "street light", "lamp", "pole", "light"),
-            (location(), text("description", True), text("pole_number"), text("duration", True), text("time_noticed")),
+            (location(), text("description", True), text("pole_number"), text("duration", True), text("time_noticed"), additional()),
         ),
         "water_issue": ServiceSchema(
             "water_issue",
@@ -83,7 +84,7 @@ def mock_service_schemas() -> dict[ServiceId, ServiceSchema]:
             "Report a water leak or supply infrastructure problem",
             "Water Services",
             ("water", "leak", "pipe", "burst", "supply"),
-            (location(), text("description", True), choice("leak_type", ("pipe", "tap", "supply", "unknown"), True), choice("severity", ("low", "medium", "high"), True), image()),
+            (location(), text("description", True), choice("leak_type", ("pipe", "tap", "supply", "unknown"), True), choice("severity", ("low", "medium", "high"), True), image(), additional()),
         ),
         "sanitation_issue": ServiceSchema(
             "sanitation_issue",
@@ -91,7 +92,7 @@ def mock_service_schemas() -> dict[ServiceId, ServiceSchema]:
             "Report a sanitation or public hygiene issue",
             "Sanitation Services",
             ("sanitation", "sewage", "drain", "toilet", "hygiene"),
-            (location(), text("description", True), choice("issue_type", ("sewage", "drain", "public_hygiene", "other"), True), text("duration"), image()),
+            (location(), text("description", True), choice("issue_type", ("sewage", "drain", "public_hygiene", "other"), True), text("duration"), image(), additional()),
         ),
     }
 

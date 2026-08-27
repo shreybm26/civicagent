@@ -123,6 +123,25 @@ class WorkflowGraph:
             next_state.state = transition(next_state.state, "location_requested")
         return self._resolve_location(next_state, text)
 
+    def confirm_location(self, state: SessionState, result: LocationResult) -> WorkflowResult:
+        if state.service_id is None:
+            raise WorkflowError("Identify a service before resolving a location")
+        if not result.address or result.lat is None or result.lng is None:
+            raise WorkflowError("A selected location requires a label and coordinates")
+        next_state = state.model_copy(deep=True)
+        if next_state.state == "COLLECTING":
+            next_state.state = transition(next_state.state, "location_requested")
+        self._apply_location(next_state, result)
+        next_state.state = transition(next_state.state, "location_resolved")
+        next_state.validation = self._validate(next_state, self.schemas[next_state.service_id])
+        return WorkflowResult(
+            state=next_state,
+            message=f"Location selected: {result.address}. Do you have a photo of this issue?",
+            event="location_resolved",
+            changed_fields=("location",),
+            metadata={"redacted_event": redacted_event(next_state, "location_resolved")},
+        )
+
     def analyze_media(
         self,
         state: SessionState,
@@ -152,6 +171,11 @@ class WorkflowGraph:
                 filename=filename,
                 relevant=result.relevant,
                 reason=result.reason,
+                content_type=content_type,
+                size_bytes=len(content),
+                summary=result.summary,
+                relevance_confidence=result.relevance_confidence,
+                details=list(result.details),
                 candidates=list(result.candidates),
             )
         )
@@ -179,9 +203,20 @@ class WorkflowGraph:
                         reason=candidate.reason,
                         changed=changed,
                     )
+            if result.details:
+                details = "; ".join(f"{detail.label}: {detail.value}" for detail in result.details if detail.confidence >= 0.7)
+                if details and self._field(next_state, "additional_details") is not None:
+                    current = self._field(next_state, "additional_details")
+                    if current is None or current.value in (None, ""):
+                        self._set_field(next_state, "additional_details", details, source="photo", confidence=min(d.confidence for d in result.details), status="candidate", reason="Summary of confident visible details from the uploaded image", changed=changed)
 
-        result_state, follow_up = self._finish_collection(next_state)
-        message = f"{result.reason} {follow_up}" if result.relevant else f"{result.reason} Please upload a relevant civic photo."
+        result_state, _ = self._finish_collection(next_state)
+        if result_state.state == "REVIEWING":
+            message = f"{result.reason} Please review the completed details below."
+        elif result.relevant:
+            message = f"{result.reason} Please complete the remaining details."
+        else:
+            message = f"{result.reason} No form fields were filled from this image. Please complete the remaining details."
         return WorkflowResult(
             state=result_state,
             message=message,
@@ -341,13 +376,12 @@ class WorkflowGraph:
         if result.address:
             self._apply_location(state, result)
             state.state = transition(state.state, "location_resolved")
-            result_state, follow_up = self._finish_collection(state)
             return WorkflowResult(
-                state=result_state,
-                message=f"{result.message} {follow_up}",
+                state=state,
+                message=f"Location selected: {result.address}. Do you have a photo of this issue?",
                 event="location_resolved",
                 changed_fields=("location",),
-                metadata={"redacted_event": redacted_event(result_state, "location_resolved")},
+                metadata={"redacted_event": redacted_event(state, "location_resolved")},
             )
         state.state = "LOCATION_REQUIRED"
         return WorkflowResult(

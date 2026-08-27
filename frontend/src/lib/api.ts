@@ -4,6 +4,8 @@ export type CivicApi = {
   createSession(): Promise<SessionView>;
   sendMessage(id: string, message: string): Promise<SessionView>;
   resolveLocation(id: string, text: string): Promise<SessionView>;
+  resolveLocationPin(id: string, input: { lat: number; lng: number; label?: string }): Promise<SessionView>;
+  decideImage(id: string, hasImage: boolean): Promise<SessionView>;
   uploadMedia(id: string, file: File): Promise<SessionView>;
   editField(id: string, field: string, value: unknown): Promise<SessionView>;
   confirm(id: string): Promise<SessionView>;
@@ -23,6 +25,10 @@ export class CivicApiError extends Error {
 const base =
   import.meta.env.VITE_API_URL ??
   (import.meta.env.DEV ? "http://localhost:8000" : "");
+
+export function mediaUrl(sessionId: string, mediaId: string): string {
+  return `${base}/api/session/${sessionId}/media/${mediaId}`;
+}
 
 async function call(path: string, init?: RequestInit): Promise<SessionView> {
   const r = await fetch(base + path, init);
@@ -62,6 +68,14 @@ export const api: CivicApi = {
     body.append("media", file);
     return call(`/api/session/${id}/media`, { method: "POST", body });
   },
+  resolveLocationPin: (id, input) =>
+    call(`/api/session/${id}/location/resolve`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input),
+    }),
+  decideImage: (id, hasImage) =>
+    call(`/api/session/${id}/media/decision`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ has_image: hasImage }),
+    }),
   editField: (id, field, value) =>
     call(`/api/session/${id}/fields/${field}`, {
       method: "PATCH",

@@ -43,6 +43,12 @@
       "id": "photo",
       "type": "image",
       "required": false
+    },
+    {
+      "id": "additional_details",
+      "type": "text",
+      "required": false,
+      "image_derivable": true
     }
   ],
   "submission": {

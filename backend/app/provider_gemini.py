@@ -8,12 +8,13 @@ from __future__ import annotations
 
 import json
 import logging
+import base64
 from typing import Any
 
 import httpx
 
 from .config import Settings
-from .contracts import Candidate, RouterResult, ServiceId
+from .contracts import Candidate, ImageDetail, ImageResult, RouterResult, ServiceId
 from .integration_adapters import ImageAnalyzerAdapter, SchemaCollectorAdapter, SchemaRouterAdapter
 from .schemas.registry import SchemaRegistry
 from .workflow.schema import SchemaField, ServiceSchema
@@ -63,6 +64,25 @@ class GeminiClient:
             return parsed if isinstance(parsed, dict) else None
         except Exception:
             logger.info("gemini_fallback", extra={"civic_event": {"event": "provider_timeout"}})
+            return None
+
+    def generate_image_json(self, prompt: str, content_type: str, content: bytes) -> dict[str, Any] | None:
+        url = "https://generativelanguage.googleapis.com/v1beta/models/" f"{self._model}:generateContent"
+        payload = {
+            "contents": [{"parts": [
+                {"inlineData": {"mimeType": content_type, "data": base64.b64encode(content).decode("ascii")}},
+                {"text": prompt},
+            ]}],
+            "generationConfig": {"temperature": 0.1, "responseMimeType": "application/json"},
+        }
+        try:
+            response = httpx.post(url, params={"key": self._api_key}, json=payload, timeout=self._timeout)
+            response.raise_for_status()
+            text = response.json().get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+            parsed = json.loads(text)
+            return parsed if isinstance(parsed, dict) else None
+        except Exception:
+            logger.info("gemini_image_fallback", extra={"civic_event": {"event": "image_provider_failure"}})
             return None
 
 
@@ -133,6 +153,58 @@ class GeminiBackedCollector:
             return None
 
 
+class GeminiImageAnalyzer:
+    def __init__(self, client: GeminiClient, fallback: ImageAnalyzerAdapter, threshold: float) -> None:
+        self._client = client
+        self._fallback = fallback
+        self._threshold = threshold
+
+    def analyze(self, schema: ServiceSchema, *, filename: str, content_type: str, content: bytes) -> ImageResult:
+        data = self._client.generate_image_json(
+            "Analyze only what is visibly present in this civic-issue image. Do not use the filename. "
+            f"The reported service is {schema.service_name}. Available image-derivable fields are "
+            f"{[{'id': field.id, 'type': field.field_type, 'options': list(field.options)} for field in schema.fields if field.image_derivable]}. "
+            'Return JSON with relevant (boolean), relevance_confidence (0..1), reason, summary, '
+            'details [{label,value,confidence,reason}], and candidates [{field_id,value,confidence,reason}]. '
+            "Return candidates only for facts directly visible in the image. An irrelevant image must return no candidates.",
+            content_type,
+            content,
+        )
+        if data is None:
+            fallback = self._fallback.analyze(schema=schema, filename=filename, content_type=content_type, content=content)
+            return fallback.model_copy(update={"reason": "The image was stored, but automated analysis is unavailable."})
+        relevant = bool(data.get("relevant"))
+        relevance_confidence = _confidence(data.get("relevance_confidence"))
+        details: list[ImageDetail] = []
+        candidates: list[Candidate] = []
+        if relevant and relevance_confidence >= self._threshold:
+            for raw in data.get("details", []):
+                confidence = _confidence(raw.get("confidence")) if isinstance(raw, dict) else 0.0
+                if confidence < self._threshold or not raw.get("label") or not raw.get("value"):
+                    continue
+                details.append(ImageDetail(label=str(raw["label"]), value=str(raw["value"]), confidence=confidence, reason=raw.get("reason")))
+            fields = {field.id: field for field in schema.fields if field.image_derivable}
+            for raw in data.get("candidates", []):
+                if not isinstance(raw, dict):
+                    continue
+                field = fields.get(str(raw.get("field_id")))
+                confidence = _confidence(raw.get("confidence"))
+                value = raw.get("value")
+                if field is None or confidence < self._threshold or value in (None, ""):
+                    continue
+                if field.options and str(value).lower() not in field.options:
+                    continue
+                candidates.append(Candidate(field_id=field.id, value=str(value).lower() if field.options else value, source="photo", confidence=confidence, reason=raw.get("reason")))
+        return ImageResult(
+            relevant=relevant and relevance_confidence >= self._threshold,
+            relevance_confidence=relevance_confidence,
+            reason=str(data.get("reason") or "Image analysis completed."),
+            summary=str(data.get("summary")) if data.get("summary") else None,
+            details=details,
+            candidates=candidates,
+        )
+
+
 def _confidence(value: Any) -> float:
     try:
         parsed = float(value)
@@ -155,4 +227,5 @@ def build_workflow_ports(settings: Settings):
         client = GeminiClient(settings.gemini_api_key, settings.gemini_model)
         router = GeminiBackedRouter(client, router)
         collector = GeminiBackedCollector(client, collector)
+        image = GeminiImageAnalyzer(client, image, settings.image_confidence_threshold)
     return schemas, router, collector, image

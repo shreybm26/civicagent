@@ -7,9 +7,11 @@ from pathlib import PurePath
 from uuid import UUID
 
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi.responses import Response
 
 from .config import Settings
-from .contracts import CivicError, ConfirmIn, FieldEditIn, LocationIn, Message, MessageIn, SessionView
+from .contracts import CivicError, ConfirmIn, FieldEditIn, LocationIn, LocationResult, MediaDecisionIn, Message, MessageIn, SessionView
+from .media_store import MediaNotFound, MediaStore
 from .provider_stub import ConversationProvider
 from .store import SessionNotFound, SessionStore
 from .workflow.graph import WorkflowGraph
@@ -24,6 +26,7 @@ def build_api_router(
     provider: ConversationProvider,
     settings: Settings,
     graph: WorkflowGraph,
+    media_store: MediaStore,
 ) -> APIRouter:
     """Create route adapters around the shared store and workflow ports."""
 
@@ -45,6 +48,7 @@ def build_api_router(
             state = store.reset(session_id)
         except SessionNotFound:
             raise _not_found() from None
+        media_store.delete_session(session_id)
         _log_event(state, "reset")
         return graph.view(state)
 
@@ -59,10 +63,24 @@ def build_api_router(
     @router.post("/api/session/{session_id}/location/resolve", response_model=SessionView)
     def resolve_session_location(session_id: UUID, body: LocationIn) -> SessionView:
         try:
-            result = graph.resolve_location(_get_state(store, session_id), body.text)
+            state = _get_state(store, session_id)
+            if body.lat is not None and body.lng is not None:
+                label = body.label or f"Pinned location ({body.lat:.5f}, {body.lng:.5f})"
+                result = graph.confirm_location(state, LocationResult(query=body.text or label, address=label, lat=body.lat, lng=body.lng, confidence=1.0, source="citizen", message=f"Location selected: {label}"))
+            else:
+                result = graph.resolve_location(state, body.text or body.label or "")
         except WorkflowError as exc:
             raise _workflow_error(exc) from exc
         return _persist_result(store, graph, result)
+
+    @router.post("/api/session/{session_id}/media/decision", response_model=SessionView)
+    def media_decision(session_id: UUID, body: MediaDecisionIn) -> SessionView:
+        state = _get_state(store, session_id)
+        state.image_decision = "added" if body.has_image else "skipped"
+        message = "Please attach a photo of the issue when you are ready." if body.has_image else "No image added. Please complete the remaining details."
+        _append_agent_turn(state, message)
+        saved = store.save(state)
+        return graph.view(saved, message=message)
 
     @router.post("/api/session/{session_id}/media", response_model=SessionView)
     def analyze_session_media(session_id: UUID, media: UploadFile = File(...)) -> SessionView:
@@ -81,15 +99,35 @@ def build_api_router(
                 detail=_error("MEDIA_TOO_LARGE", "That image is too large for this demo.", False),
             )
         try:
+            from io import BytesIO
+            from PIL import Image, UnidentifiedImageError
+            try:
+                with Image.open(BytesIO(content)) as image:
+                    image.verify()
+            except (UnidentifiedImageError, OSError):
+                raise HTTPException(status_code=422, detail=_error("INVALID_IMAGE", "The uploaded bytes are not a readable image.", False)) from None
+            media_id = media_store.save(session_id, filename, content_type, content)
             result = graph.analyze_media(
                 state,
                 filename=filename,
                 content_type=content_type,
                 content=content,
             )
+            result.state.image_decision = "added"
+            result.state.messages.append(Message(role="citizen", text="Uploaded an image.", media_id=media_id))
+            result.state.evidence[-1].media_id = media_id
+            media_store.set_analysis(media_id, result.state.evidence[-1].model_dump(mode="json"))
         except WorkflowError as exc:
             raise _workflow_error(exc) from exc
         return _persist_result(store, graph, result)
+
+    @router.get("/api/session/{session_id}/media/{media_id}")
+    def get_session_media(session_id: UUID, media_id: str):
+        try:
+            stored = media_store.get(session_id, media_id)
+        except MediaNotFound:
+            raise _not_found() from None
+        return Response(content=stored.content, media_type=stored.content_type, headers={"Content-Disposition": f'inline; filename="{stored.filename}"', "X-Content-SHA256": stored.sha256})
 
     @router.patch("/api/session/{session_id}/fields/{field_id}", response_model=SessionView)
     def edit_session_field(session_id: UUID, field_id: str, body: FieldEditIn) -> SessionView:

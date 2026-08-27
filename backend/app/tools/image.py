@@ -1,10 +1,22 @@
-from ..contracts import Candidate, ImageResult
+from io import BytesIO
+
+from PIL import Image, UnidentifiedImageError
+
+from ..contracts import Candidate, ImageDetail, ImageResult
 
 class ImageAnalyzer:
     def analyze(self, filename: str, content: bytes, provider: str = "mock") -> ImageResult:
-        name = filename.lower()
-        if any(word in name for word in ("selfie", "face", "portrait")):
-            return ImageResult(relevant=False, reason="The image appears to be a selfie, not civic evidence.")
-        if any(word in name for word in ("pothole", "road", "street")):
-            return ImageResult(relevant=True, reason="The image appears relevant to a road issue.", candidates=[Candidate(field_id="severity", value="high", source="photo", confidence=.82, reason="Visible road-surface damage in the uploaded image")])
-        return ImageResult(relevant=True, reason="Image saved as evidence; no field was inferred.")
+        if not content:
+            return ImageResult(relevant=False, reason="The uploaded image is empty.")
+        try:
+            with Image.open(BytesIO(content)) as image:
+                image.verify()
+        except (UnidentifiedImageError, OSError):
+            return ImageResult(relevant=False, reason="The uploaded file is not a readable image.")
+        # The mock provider deliberately makes no visual claims from filenames.
+        return ImageResult(
+            relevant=True,
+            relevance_confidence=0.75,
+            reason="The image was received and is available for civic review.",
+            summary="No confident field could be extracted from this image in demo mode.",
+        )

@@ -44,6 +44,12 @@
       "required": false
     },
     {
+      "id": "additional_details",
+      "type": "text",
+      "required": false,
+      "image_derivable": true
+    },
+    {
       "id": "landmark",
       "type": "text",
       "required": false

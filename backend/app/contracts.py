@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 State = Literal[
     "IDLE",
@@ -48,6 +48,7 @@ class Message(ContractModel):
     role: MessageRole
     text: str = Field(min_length=1)
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    media_id: str | None = None
 
 
 class FieldValue(ContractModel):
@@ -78,7 +79,17 @@ class RouterResult(ContractModel):
 class ImageResult(ContractModel):
     relevant: bool
     reason: str = Field(min_length=1)
+    relevance_confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    summary: str | None = None
+    details: list["ImageDetail"] = Field(default_factory=list)
     candidates: list[Candidate] = Field(default_factory=list)
+
+
+class ImageDetail(ContractModel):
+    label: str = Field(min_length=1)
+    value: str = Field(min_length=1)
+    confidence: float = Field(ge=0.0, le=1.0)
+    reason: str | None = None
 
 
 class LocationResult(ContractModel):
@@ -134,6 +145,11 @@ class Evidence(ContractModel):
     filename: str = Field(min_length=1)
     relevant: bool
     reason: str = Field(min_length=1)
+    content_type: str = "image/jpeg"
+    size_bytes: int = Field(default=1, ge=1)
+    summary: str | None = None
+    relevance_confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    details: list[ImageDetail] = Field(default_factory=list)
     candidates: list[Candidate] = Field(default_factory=list)
 
 
@@ -154,6 +170,7 @@ class SessionState(ContractModel):
     messages: list[Message] = Field(default_factory=list)
     fields: list[FieldValue] = Field(default_factory=list)
     evidence: list[Evidence] = Field(default_factory=list)
+    image_decision: Literal["pending", "added", "skipped"] = "pending"
     location: Location | None = None
     validation: ValidationResult = Field(default_factory=ValidationResult)
     confirmation: Confirmation = Field(default_factory=Confirmation)
@@ -181,15 +198,35 @@ class MessageIn(ContractModel):
 
 
 class LocationIn(ContractModel):
-    text: str = Field(min_length=1, max_length=1000)
+    text: str | None = Field(default=None, max_length=1000)
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lng: float | None = Field(default=None, ge=-180, le=180)
+    label: str | None = Field(default=None, max_length=1000)
 
     @field_validator("text")
     @classmethod
-    def normalize_text(cls, value: str) -> str:
+    def normalize_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         value = value.strip()
-        if not value:
-            raise ValueError("location text cannot be empty")
-        return value
+        return value or None
+
+    @field_validator("label")
+    @classmethod
+    def normalize_label(cls, value: str | None) -> str | None:
+        return value.strip() or None if value is not None else None
+
+    @model_validator(mode="after")
+    def require_location_input(self):
+        if not self.text and (self.lat is None or self.lng is None) and not self.label:
+            raise ValueError("provide location text, label, or both coordinates")
+        if (self.lat is None) != (self.lng is None):
+            raise ValueError("provide both latitude and longitude")
+        return self
+
+
+class MediaDecisionIn(ContractModel):
+    has_image: bool
 
 
 class FieldEditIn(ContractModel):

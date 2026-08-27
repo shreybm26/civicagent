@@ -12,6 +12,7 @@ from .config import PROJECT_ROOT, Settings, settings
 from .provider_gemini import build_workflow_ports
 from .provider_stub import ConversationProvider
 from .store import SessionStore
+from .media_store import MediaStore
 from .workflow.graph import WorkflowGraph
 
 FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist"
@@ -47,6 +48,7 @@ def _mount_frontend(app: FastAPI) -> None:
 def create_app(runtime_settings: Settings = settings) -> FastAPI:
     app = FastAPI(title="CivicAgent API", version="0.2.0")
     store = SessionStore(max_sessions=runtime_settings.max_sessions)
+    media_store = MediaStore(runtime_settings.media_database_path)
     provider = ConversationProvider()
     schemas, router, collector, image_service = build_workflow_ports(runtime_settings)
     workflow = WorkflowGraph(
@@ -69,12 +71,14 @@ def create_app(runtime_settings: Settings = settings) -> FastAPI:
             provider=provider,
             settings=runtime_settings,
             graph=workflow,
+            media_store=media_store,
         )
     )
     _mount_frontend(app)
     app.state.session_store = store
     app.state.conversation_provider = provider
     app.state.workflow = workflow
+    app.state.media_store = media_store
     return app
 
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, isExpiredSession } from "./lib/api";
+import { api, isExpiredSession, mediaUrl } from "./lib/api";
 import { conversation, STATE_LABEL } from "./lib/conversation";
 import type { SessionView } from "./lib/types";
 import { ChatPanel } from "./features/chat/ChatPanel";
@@ -8,6 +8,7 @@ import { EvidencePanel } from "./features/evidence/EvidencePanel";
 import { ReviewCard } from "./features/review/ReviewCard";
 import { ReceiptPanel } from "./features/receipt/ReceiptPanel";
 import { LocationConfirmation } from "./features/location/LocationConfirmation";
+import { RemainingFieldsForm } from "./features/fields/RemainingFieldsForm";
 
 const FONT_STEPS = ["15px", "16px", "18px"];
 
@@ -82,8 +83,40 @@ export default function App() {
   const messages = conversation(session);
   const locationMissing = session.fields.some((field) => field.id === "location" && (field.status === "missing" || field.value == null || field.value === ""));
   const showLocation = session.state === "LOCATION_REQUIRED" || (session.state === "COLLECTING" && locationMissing);
-  const showEvidence = session.state === "COLLECTING" || session.state === "MEDIA_ANALYSIS" || session.state === "LOCATION_REQUIRED";
+  const hasLocation = Boolean(session.location?.address);
+  const latestEvidence = session.evidence?.at(-1);
+  const imageHandled = session.image_decision === "skipped" || Boolean(latestEvidence);
   const stateLabel = hindi ? STATE_LABEL[session.state]?.hi : STATE_LABEL[session.state]?.en;
+  let contextualStep = null;
+  if (showLocation) {
+    contextualStep = <LocationConfirmation
+      onConfirm={(pick) => run(() => api.resolveLocationPin(session.session_id, pick), "Location could not be confirmed.")}
+      onResolveText={(text) => run(() => api.resolveLocation(session.session_id, text), "Location could not be verified. Try JNTU Metro or Charminar.")}
+      busy={busy}
+      hindi={hindi}
+    />;
+  } else if (hasLocation && !imageHandled) {
+    contextualStep = <EvidencePanel
+      onChoose={(hasImage) => { if (!hasImage) void run(() => api.decideImage(session.session_id, false), "Image choice could not be saved."); }}
+      onUpload={(file) => run(() => api.uploadMedia(session.session_id, file), "Photo upload failed. You can continue without a photo.")}
+      busy={busy}
+      hindi={hindi}
+    />;
+  } else if (hasLocation && imageHandled && session.state !== "REVIEWING" && session.state !== "COMPLETED") {
+    contextualStep = <>
+      {latestEvidence && <EvidencePanel onChoose={() => undefined} onUpload={() => undefined} busy={busy} evidence={latestEvidence} hindi={hindi} />}
+      <RemainingFieldsForm fields={session.fields} onSave={(id, value) => run(() => api.editField(session.session_id, id, value), "That detail could not be saved.")} busy={busy} />
+    </>;
+  } else if (session.state === "REVIEWING") {
+    contextualStep = <ReviewCard
+      fields={session.fields}
+      department={session.service?.department}
+      onEdit={(id, value) => api.editField(session.session_id, id, value).then(setSession).catch(() => setError("That correction could not be saved."))}
+      onSubmit={() => run(() => api.confirm(session.session_id), "Submission failed. Please review and retry.")}
+      busy={busy}
+      hindi={hindi}
+    />;
+  }
 
   return (
     <div className="gov-shell">
@@ -133,36 +166,10 @@ export default function App() {
               busy={busy}
               hindi={hindi}
               showSuggestions={session.state === "IDLE"}
+              contextualStep={contextualStep}
+              composerEnabled={!session.service_id}
+              mediaUrl={(mediaId) => mediaUrl(session.session_id, mediaId)}
             />
-            {showLocation && (
-              <LocationConfirmation
-                address={session.location?.address ?? undefined}
-                lat={session.location?.lat ?? undefined}
-                lng={session.location?.lng ?? undefined}
-                confidence={session.location?.confidence}
-                onResolve={(text) => run(() => api.resolveLocation(session.session_id, text), "Location could not be verified. Try JNTU Metro or Charminar.")}
-                busy={busy}
-                hindi={hindi}
-              />
-            )}
-            {showEvidence && (
-              <EvidencePanel
-                onUpload={(file) => run(() => api.uploadMedia(session.session_id, file), "Photo upload failed. You can continue without a photo.")}
-                busy={busy}
-                result={session.evidence?.at(-1)?.reason}
-                hindi={hindi}
-              />
-            )}
-            {session.state === "REVIEWING" && (
-              <ReviewCard
-                fields={session.fields}
-                department={session.service?.department}
-                onEdit={(id, value) => api.editField(session.session_id, id, value).then(setSession).catch(() => setError("That correction could not be saved."))}
-                onSubmit={() => run(() => api.confirm(session.session_id), "Submission failed. Please review and retry.")}
-                busy={busy}
-                hindi={hindi}
-              />
-            )}
             {session.state === "COMPLETED" && session.receipt && (
               <ReceiptPanel receipt={session.receipt} onReset={() => run(() => api.reset(session.session_id), "Reset failed.")} hindi={hindi} />
             )}
