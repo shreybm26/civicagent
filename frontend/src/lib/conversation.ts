@@ -21,11 +21,11 @@ export function conversation(session: SessionView | null): Message[] {
 }
 
 export const SUGGESTIONS = [
-  { label: "Pothole", hi: "गड्ढा", text: "There is a pothole near JNTU Metro" },
-  { label: "Garbage", hi: "कचरा", text: "Garbage has not been collected near Hitech City Metro" },
-  { label: "Streetlight", hi: "स्ट्रीटलाइट", text: "The streetlight outside Ameerpet Metro has been off for a week" },
-  { label: "Water leak", hi: "पानी रिसाव", text: "There is a water leak near Charminar" },
-  { label: "Sanitation", hi: "स्वच्छता", text: "There is a sanitation issue near Secunderabad Railway Station" },
+  { label: "Pothole", hi: "गड्ढा", text: "There is a pothole near JNTU Metro", textHi: "जेएनटीयू मेट्रो के पास गड्ढा है" },
+  { label: "Garbage", hi: "कचरा", text: "Garbage has not been collected near Hitech City Metro", textHi: "हाइटेक सिटी मेट्रो के पास कचरा नहीं उठाया गया" },
+  { label: "Streetlight", hi: "स्ट्रीटलाइट", text: "The streetlight outside Ameerpet Metro has been off for a week", textHi: "अमीरपेट मेट्रो के बाहर स्ट्रीटलाइट एक हफ्ते से बंद है" },
+  { label: "Water leak", hi: "पानी रिसाव", text: "There is a water leak near Charminar", textHi: "चारमीनार के पास पानी का रिसाव है" },
+  { label: "Sanitation", hi: "स्वच्छता", text: "There is a sanitation issue near Secunderabad Railway Station", textHi: "सिकंदराबाद रेलवे स्टेशन के पास स्वच्छता की समस्या है" },
 ];
 
 export const STATE_LABEL: Record<string, { en: string; hi: string }> = {

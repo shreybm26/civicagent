@@ -11,7 +11,10 @@
     "damage",
     "pavement",
     "asphalt",
-    "surface"
+    "surface",
+    "गड्ढा",
+    "गड्ढे",
+    "सड़क"
   ],
   "fields": [
     {

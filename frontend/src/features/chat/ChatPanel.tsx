@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import type { Message } from "../../lib/types";
 import { SUGGESTIONS } from "../../lib/conversation";
+import { localizeAgentText } from "../../lib/i18n";
 
 type ChatPanelProps = {
   messages: Message[];
@@ -35,7 +36,7 @@ export function ChatPanel({ messages, onSend, busy, hindi, showSuggestions }: Ch
         {messages.map((message, index) => (
           <p key={`${message.timestamp}-${index}`} className={`bubble ${message.role}`}>
             <strong>{message.role === "citizen" ? (hindi ? "आप" : "You") : hindi ? "सहायक" : "Assistant"}</strong>
-            {message.text}
+            {message.role === "citizen" ? message.text : localizeAgentText(message.text, hindi)}
           </p>
         ))}
         {busy && (
@@ -49,7 +50,7 @@ export function ChatPanel({ messages, onSend, busy, hindi, showSuggestions }: Ch
       {showSuggestions && (
         <div className="chips" aria-label={hindi ? "सुझाए गए विषय" : "Suggested issues"}>
           {SUGGESTIONS.map((item) => (
-            <button key={item.label} type="button" disabled={busy} onClick={() => onSend(item.text)}>
+            <button key={item.label} type="button" disabled={busy} onClick={() => onSend(hindi ? item.textHi : item.text)}>
               {hindi ? item.hi : item.label}
             </button>
           ))}

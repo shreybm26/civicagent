@@ -1,3 +1,5 @@
+import { localizeAgentText } from "../../lib/i18n";
+
 export function EvidencePanel({
   onUpload,
   busy,
@@ -24,7 +26,7 @@ export function EvidencePanel({
           onChange={(event) => event.target.files?.[0] && onUpload(event.target.files[0])}
         />
       </label>
-      {result && <p role="status">{result}</p>}
+      {result && <p role="status">{localizeAgentText(result, hindi)}</p>}
       <small>{hindi ? "सेल्फी स्वीकार नहीं की जाएगी।" : "Selfies are rejected. The report can continue without a photo."}</small>
     </section>
   );

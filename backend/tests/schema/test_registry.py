@@ -10,6 +10,6 @@ def test_registry_loads_exactly_five_services():
 def test_registry_rejects_duplicate_or_unknown(tmp_path: Path):
     source = Path(__file__).parents[2] / "app" / "data" / "schemas"
     for path in source.glob("*.json"):
-        (tmp_path / path.name).write_text(path.read_text(), encoding="utf-8")
+            (tmp_path / path.name).write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
     (tmp_path / "bad.json").write_text(json.dumps({"service_id":"unknown"}), encoding="utf-8")
     with pytest.raises(ValueError): SchemaRegistry(tmp_path)

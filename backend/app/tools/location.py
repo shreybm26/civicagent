@@ -24,13 +24,13 @@ class CuratedLocation:
 
 
 CURATED_LOCATIONS: tuple[CuratedLocation, ...] = (
-    CuratedLocation("JNTU Metro Station", "Kukatpally", "Hyderabad", "500085", 17.4933, 78.3914, ("jntu", "jntu metro", "near jntu", "kukatpally metro")),
+    CuratedLocation("JNTU Metro Station", "Kukatpally", "Hyderabad", "500085", 17.4933, 78.3914, ("jntu", "jntu metro", "near jntu", "kukatpally metro", "जेएनटीयू", "जेएनटीयू मेट्रो")),
     CuratedLocation("KPHB Metro Station", "Kukatpally", "Hyderabad", "500072", 17.4841, 78.3986, ("kphb", "kphb metro", "kphb colony")),
     CuratedLocation("Miyapur Metro Station", "Miyapur", "Hyderabad", "500049", 17.4968, 78.3570, ("miyapur", "miyapur metro")),
-    CuratedLocation("Hitech City Metro Station", "Madhapur", "Hyderabad", "500081", 17.4474, 78.3762, ("hitech city", "hitech metro", "madhapur metro")),
-    CuratedLocation("Charminar", "Old City", "Hyderabad", "500002", 17.3616, 78.4747, ("charminar", "old city")),
-    CuratedLocation("Secunderabad Railway Station", "Secunderabad", "Hyderabad", "500003", 17.4334, 78.5013, ("secunderabad station", "secunderabad railway")),
-    CuratedLocation("Ameerpet Metro Station", "Ameerpet", "Hyderabad", "500016", 17.4375, 78.4483, ("ameerpet", "ameerpet metro")),
+    CuratedLocation("Hitech City Metro Station", "Madhapur", "Hyderabad", "500081", 17.4474, 78.3762, ("hitech city", "hitech metro", "madhapur metro", "हाइटेक", "हाइटेक सिटी")),
+    CuratedLocation("Charminar", "Old City", "Hyderabad", "500002", 17.3616, 78.4747, ("charminar", "old city", "चारमीनार")),
+    CuratedLocation("Secunderabad Railway Station", "Secunderabad", "Hyderabad", "500003", 17.4334, 78.5013, ("secunderabad station", "secunderabad railway", "सिकंदराबाद")),
+    CuratedLocation("Ameerpet Metro Station", "Ameerpet", "Hyderabad", "500016", 17.4375, 78.4483, ("ameerpet", "ameerpet metro", "अमीरपेट")),
     CuratedLocation("Gachibowli Stadium", "Gachibowli", "Hyderabad", "500032", 17.4401, 78.3489, ("gachibowli", "gachibowli stadium")),
     CuratedLocation("LB Nagar Metro Station", "LB Nagar", "Hyderabad", "500074", 17.3457, 78.5522, ("lb nagar", "lb nagar metro")),
     CuratedLocation("Tank Bund", "Hussain Sagar", "Hyderabad", "500080", 17.4239, 78.4738, ("tank bund", "hussain sagar")),
@@ -40,7 +40,7 @@ CURATED_LOCATIONS: tuple[CuratedLocation, ...] = (
 
 
 def _normalize(value: str) -> str:
-    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9 ]", " ", value.casefold())).strip()
+    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9\u0900-\u097f ]", " ", value.casefold())).strip()
 
 
 def resolve_location(text: str) -> LocationResult:
