@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import base64
+import re
 from typing import Any
 
 import httpx
@@ -60,17 +61,20 @@ class GeminiClient:
                 .get("parts", [{}])[0]
                 .get("text", "")
             )
-            parsed = json.loads(text)
+            parsed = _parse_json_object(text)
             return parsed if isinstance(parsed, dict) else None
-        except Exception:
-            logger.info("gemini_fallback", extra={"civic_event": {"event": "provider_timeout"}})
+        except httpx.HTTPStatusError as exc:
+            logger.warning("gemini_fallback", extra={"civic_event": {"event": "provider_http_error", "status": exc.response.status_code}})
+            return None
+        except (httpx.RequestError, json.JSONDecodeError, KeyError, IndexError, TypeError) as exc:
+            logger.warning("gemini_fallback", extra={"civic_event": {"event": "provider_response_error", "error_type": type(exc).__name__}})
             return None
 
     def generate_image_json(self, prompt: str, content_type: str, content: bytes) -> dict[str, Any] | None:
         url = "https://generativelanguage.googleapis.com/v1beta/models/" f"{self._model}:generateContent"
         payload = {
             "contents": [{"parts": [
-                {"inlineData": {"mimeType": content_type, "data": base64.b64encode(content).decode("ascii")}},
+                {"inline_data": {"mime_type": content_type, "data": base64.b64encode(content).decode("ascii")}},
                 {"text": prompt},
             ]}],
             "generationConfig": {"temperature": 0.1, "responseMimeType": "application/json"},
@@ -79,11 +83,28 @@ class GeminiClient:
             response = httpx.post(url, params={"key": self._api_key}, json=payload, timeout=self._timeout)
             response.raise_for_status()
             text = response.json().get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-            parsed = json.loads(text)
+            parsed = _parse_json_object(text)
             return parsed if isinstance(parsed, dict) else None
-        except Exception:
-            logger.info("gemini_image_fallback", extra={"civic_event": {"event": "image_provider_failure"}})
+        except httpx.HTTPStatusError as exc:
+            logger.warning("gemini_image_fallback", extra={"civic_event": {"event": "image_provider_http_error", "status": exc.response.status_code}})
             return None
+        except (httpx.RequestError, json.JSONDecodeError, KeyError, IndexError, TypeError) as exc:
+            logger.warning("gemini_image_fallback", extra={"civic_event": {"event": "image_provider_response_error", "error_type": type(exc).__name__}})
+            return None
+
+
+def _parse_json_object(text: str) -> dict[str, Any] | None:
+    """Parse strict JSON or JSON wrapped in a markdown fence/prose."""
+    candidate = text.strip()
+    fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", candidate, re.IGNORECASE | re.DOTALL)
+    if fenced:
+        candidate = fenced.group(1)
+    else:
+        start, end = candidate.find("{"), candidate.rfind("}")
+        if start >= 0 and end > start:
+            candidate = candidate[start : end + 1]
+    parsed = json.loads(candidate)
+    return parsed if isinstance(parsed, dict) else None
 
 
 class GeminiBackedRouter:
