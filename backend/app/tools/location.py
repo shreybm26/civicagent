@@ -66,22 +66,89 @@ CURATED_LOCATIONS: tuple[CuratedLocation, ...] = (
 )
 
 
+FILLER_PREFIX = re.compile(
+    r"^(?:my\s+area\s+is|my\s+location\s+is|the\s+area\s+is|the\s+location\s+is|"
+    r"i\s+live\s+in|i\s+am\s+in|i['’]m\s+in|it\s+is\s+in|it['’]s\s+in|"
+    r"the\s+issue\s+is\s+(?:in|at)|issue\s+is\s+(?:in|at)|"
+    r"located\s+(?:in|at)|area\s+is|location\s+is|"
+    r"near|around|at|in)\s+",
+    re.IGNORECASE,
+)
+
+KNOWN_CITIES = (
+    "bengaluru",
+    "bangalore",
+    "hyderabad",
+    "secunderabad",
+    "mumbai",
+    "delhi",
+    "new delhi",
+    "chennai",
+    "kolkata",
+    "pune",
+    "ahmedabad",
+    "jaipur",
+    "lucknow",
+    "kochi",
+    "mysuru",
+    "mysore",
+    "gurgaon",
+    "gurugram",
+    "noida",
+    "chandigarh",
+)
+
+
 def _normalize(value: str) -> str:
     return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9\u0900-\u097f ]", " ", value.casefold())).strip()
 
 
-def compose_location_query(text: str, prior_query: str | None = None) -> str:
-    """Keep earlier area/city context when the citizen adds a landmark next."""
+def strip_location_filler(text: str) -> str:
+    """Drop chat phrasing so geocoders see a place name, not 'my area is …'."""
 
-    query = text.strip()
-    prior = (prior_query or "").strip()
-    if not prior:
-        return query
-    if _normalize(prior) in _normalize(query):
-        return query
-    if _normalize(query) in _normalize(prior):
-        return prior
-    return f"{query}, {prior}"
+    value = text.strip().strip(" ,")
+    original = value
+    for _ in range(4):
+        next_value = FILLER_PREFIX.sub("", value).strip(" ,")
+        if next_value == value:
+            break
+        value = next_value
+    return value or original
+
+
+def _looks_complete(text: str) -> bool:
+    cleaned = strip_location_filler(text)
+    if len([part for part in cleaned.split(",") if part.strip()]) >= 2:
+        return True
+    normalized = _normalize(cleaned)
+    return any(city in normalized for city in KNOWN_CITIES)
+
+
+def compose_location_query(text: str, prior_query: str | None = None) -> str:
+    """Build the best single search string for a typed place."""
+
+    return candidate_location_queries(text, prior_query)[0] if text.strip() else ""
+
+
+def candidate_location_queries(text: str, prior_query: str | None = None) -> list[str]:
+    """Try the citizen's latest place first; only reuse a failed attempt as extra context."""
+
+    cleaned = strip_location_filler(text)
+    prior = strip_location_filler(prior_query) if prior_query else ""
+    ordered: list[str] = []
+
+    def add(query: str) -> None:
+        query = query.strip(" ,")
+        if not query:
+            return
+        if any(_normalize(query) == _normalize(existing) for existing in ordered):
+            return
+        ordered.append(query)
+
+    if prior and not _looks_complete(cleaned):
+        add(f"{cleaned}, {prior}")
+    add(cleaned)
+    return ordered or [text.strip()]
 
 
 def _short_address(display_name: str) -> str:
@@ -141,14 +208,8 @@ def _geocode_hits_to_result(query: str, hits: GeocodeHits) -> LocationResult:
             message="I could not find that place yet. Try an area and city, or drop a pin on the map.",
         )
 
-    if len(usable) > 1:
-        names = ", ".join(item[2].split(",")[0] for item in usable[:3])
-        return LocationResult(
-            query=query,
-            needs_clarification=True,
-            message=f"I found more than one possible location ({names}). Which one is correct?",
-        )
-
+    # Several OSM rows for one locality is normal (ward, suburb, bus stop).
+    # Pick the top match so chat does not loop; the citizen can still correct it later.
     lat, lng, address = usable[0]
     return LocationResult(
         query=query,
@@ -161,20 +222,8 @@ def _geocode_hits_to_result(query: str, hits: GeocodeHits) -> LocationResult:
     )
 
 
-def resolve_location(
-    text: str,
-    *,
-    prior_query: str | None = None,
-    geocode: GeocodeFn | None = None,
-) -> LocationResult:
-    query = compose_location_query(text, prior_query)
-    if not query:
-        return LocationResult(query="unknown", needs_clarification=True, message="Please tell me a nearby landmark or area.")
-
+def _curated_match(query: str) -> LocationResult | None:
     normalized = _normalize(query)
-    if normalized in VAGUE_QUERIES:
-        return LocationResult(query=query, needs_clarification=True, message="Please provide a recognizable landmark, area, or street.")
-
     matches = [
         location
         for location in CURATED_LOCATIONS
@@ -199,7 +248,37 @@ def resolve_location(
             source="curated_location",
             message=f"I found this location: {location.address}. Is that correct?",
         )
+    return None
+
+
+def resolve_location(
+    text: str,
+    *,
+    prior_query: str | None = None,
+    geocode: GeocodeFn | None = None,
+) -> LocationResult:
+    raw = text.strip()
+    if not raw:
+        return LocationResult(query="unknown", needs_clarification=True, message="Please tell me a nearby landmark or area.")
+
+    cleaned = strip_location_filler(raw)
+    if _normalize(raw) in VAGUE_QUERIES or _normalize(cleaned) in VAGUE_QUERIES:
+        return LocationResult(query=raw, needs_clarification=True, message="Please provide a recognizable landmark, area, or street.")
+
+    for candidate in (cleaned, raw):
+        curated = _curated_match(candidate)
+        if curated is not None:
+            return curated
 
     if geocode is None:
         geocode = nominatim_search
-    return _geocode_hits_to_result(query, geocode(query))
+    last: LocationResult | None = None
+    for query in candidate_location_queries(raw, prior_query):
+        last = _geocode_hits_to_result(query, geocode(query))
+        if last.address:
+            return last
+    return last or LocationResult(
+        query=cleaned or raw,
+        needs_clarification=True,
+        message="I could not find that place yet. Try an area and city, or drop a pin on the map.",
+    )

@@ -1,6 +1,6 @@
 from unittest.mock import patch
 
-from app.tools.location import compose_location_query, resolve_location
+from app.tools.location import candidate_location_queries, compose_location_query, resolve_location, strip_location_filler
 
 
 def test_jntu_alias_resolves_only_to_curated_data() -> None:
@@ -60,24 +60,56 @@ def test_follow_up_landmark_reuses_previous_area() -> None:
         geocode=geocode,
     )
 
-    assert captured == ["near Wipro office, in junnasandra, bengaluru"]
+    assert captured[0] == "Wipro office, junnasandra, bengaluru"
     assert result.source == "geocoded"
     assert result.address is not None
 
 
+def test_chat_phrasing_and_failed_typo_do_not_block_a_city_area() -> None:
+    captured: list[str] = []
+    hits = [
+        {
+            "lat": "13.1005",
+            "lon": "77.5940",
+            "display_name": "Yelahanka, Bengaluru, Karnataka, India",
+        }
+    ]
+
+    def geocode(query: str):
+        captured.append(query)
+        if query == "Yelahanka, Bengaluru":
+            return hits
+        return []
+
+    result = resolve_location(
+        "my area is Yelahanka, Bengaluru",
+        prior_query="Junnsandra",
+        geocode=geocode,
+    )
+
+    assert captured == ["Yelahanka, Bengaluru"]
+    assert result.source == "geocoded"
+    assert result.lat == 13.1005
+    assert "Yelahanka" in (result.address or "")
+
+
+def test_strip_location_filler() -> None:
+    assert strip_location_filler("my area is Yelahanka, Bengaluru") == "Yelahanka, Bengaluru"
+    assert strip_location_filler("in junnasandra, bengaluru") == "junnasandra, bengaluru"
+
+
 def test_compose_query_does_not_duplicate_context() -> None:
-    assert compose_location_query("Junnasandra, Bengaluru", "in junnasandra, bengaluru") == "in junnasandra, bengaluru"
-    assert compose_location_query("in junnasandra, bengaluru", "in junnasandra, bengaluru") == "in junnasandra, bengaluru"
+    assert compose_location_query("Junnasandra, Bengaluru", "in junnasandra, bengaluru") == "Junnasandra, Bengaluru"
+    assert candidate_location_queries("Junnasandra, Bengaluru", "Junnsandra") == ["Junnasandra, Bengaluru"]
 
 
-def test_multiple_geocode_hits_ask_which_place() -> None:
+def test_multiple_geocode_hits_use_the_top_match() -> None:
     hits = [
         {"lat": "12.84", "lon": "77.66", "display_name": "Wipro Electronic City, Bengaluru, India"},
         {"lat": "12.97", "lon": "77.72", "display_name": "Wipro Whitefield, Bengaluru, India"},
     ]
     result = resolve_location("Wipro office, Bengaluru", geocode=lambda _: hits)
 
-    assert result.address is None
-    assert result.needs_clarification is True
-    assert "Electronic City" in (result.message or "")
-    assert "Whitefield" in (result.message or "")
+    assert result.needs_clarification is False
+    assert result.source == "geocoded"
+    assert "Electronic City" in (result.address or "")
