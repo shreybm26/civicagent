@@ -32,7 +32,7 @@ KNOWN_SERVICES: tuple[ServiceId, ...] = (
 
 
 class GeminiClient:
-    def __init__(self, api_key: str, model: str, timeout: float = 8.0) -> None:
+    def __init__(self, api_key: str, model: str, timeout: float = 120.0) -> None:
         self._api_key = api_key
         self._model = model.strip() or "gemini-flash-latest"
         self._timeout = timeout
@@ -245,7 +245,11 @@ def build_workflow_ports(settings: Settings):
     image = ImageAnalyzerAdapter()
     enabled = settings.provider_mode in {"gemini", "llm", "auto"} and bool(settings.gemini_api_key)
     if enabled:
-        client = GeminiClient(settings.gemini_api_key, settings.gemini_model)
+        client = GeminiClient(
+            settings.gemini_api_key,
+            settings.gemini_model,
+            timeout=settings.gemini_timeout_seconds,
+        )
         router = GeminiBackedRouter(client, router)
         collector = GeminiBackedCollector(client, collector)
         image = GeminiImageAnalyzer(client, image, settings.image_confidence_threshold)

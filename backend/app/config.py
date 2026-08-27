@@ -39,11 +39,23 @@ def _float_env(name: str, default: float) -> float:
     return min(max(value, 0.0), 1.0)
 
 
+def _positive_float_env(name: str, default: float) -> float:
+    """Read a positive duration without allowing an unusable zero timeout."""
+    try:
+        value = float(os.getenv(name, str(default)))
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
 @dataclass(frozen=True)
 class Settings:
     provider_mode: str = os.getenv("PROVIDER_MODE", "mock").strip().lower() or "mock"
     gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
     gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
+    # Multimodal Gemini requests can take considerably longer than text-only
+    # requests, especially on the first request or when the model is busy.
+    gemini_timeout_seconds: float = _positive_float_env("GEMINI_TIMEOUT_SECONDS", 120.0)
     cors_origins: tuple[str, ...] = _origins_env()
     max_upload_bytes: int = _int_env("MAX_UPLOAD_BYTES", 10 * 1024 * 1024)
     max_sessions: int = _int_env("MAX_SESSIONS", 100)
