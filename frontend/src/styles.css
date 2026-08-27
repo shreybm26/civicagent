@@ -165,6 +165,10 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
 .fields {
   border: 1px solid var(--line);
   background: var(--card);
+  min-width: 0;
+  max-height: min(78vh, 860px);
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 .panel-head, .chat-head {
   display: flex;
@@ -396,9 +400,47 @@ button.primary, .composer button.primary, .location .primary, .review .primary, 
 
 .status-line { margin: 12px 16px 0; color: var(--muted); }
 .empty { color: var(--muted); padding: 16px; }
-.form-table { width: 100%; border-collapse: collapse; margin: 8px 0 16px; font-size: 14px; }
-.form-table th, .form-table td { padding: 10px 16px; border-bottom: 1px solid #edf0f2; text-align: left; vertical-align: top; text-transform: capitalize; }
-.form-table th { background: #eef3f8; color: var(--navy); font-size: 12px; }
+.form-table {
+  width: 100%;
+  max-width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  margin: 8px 0 20px;
+  font-size: 14px;
+}
+.form-table th,
+.form-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #edf0f2;
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  hyphens: auto;
+}
+.form-table th {
+  background: #eef3f8;
+  color: var(--navy);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.form-table th:nth-child(1),
+.form-table td:nth-child(1) {
+  width: 28%;
+  text-transform: capitalize;
+}
+.form-table th:nth-child(3),
+.form-table td:nth-child(3) {
+  width: 20%;
+  text-transform: capitalize;
+}
+.form-table td:nth-child(2) {
+  text-transform: none;
+}
+.form-table tr:last-child td {
+  border-bottom: none;
+}
 .form-table tr.missing td { color: #8a5d19; background: #fff8eb; }
 .upload { display: block; font-weight: 700; padding-top: 14px; }
 .upload input { display: block; margin: 10px 0 12px; }
@@ -506,6 +548,7 @@ button.primary, .composer button.primary, .location .primary, .review .primary, 
   .composer input, .location input { flex-basis: 100%; }
   .seal { width: 52px; height: 52px; }
   .chat { height: min(82vh, 720px); }
+  .fields { max-height: none; }
   .jump-latest { bottom: 108px; }
   .chat-inline-step .location-map { height: 220px; }
 }
