@@ -63,7 +63,23 @@ If those three variables are missing, the API falls back to SQLite inside the co
 
 The access key is shown **once** on the receipt. Only a SHA-256 HMAC of it is stored (`key_hash`). The chat transcript and photo bytes are not written to this table.
 
-The track page also shows a **demonstration neighbourhood picture**: counts by issue type, synthetic nearby samples labelled as demo (not live ULB data), plus other tickets filed in this prototype within about 2 km. The timeline stops at “awaiting ward assignment” on purpose.
+The track page also shows a **demonstration neighbourhood picture**: counts by issue type, synthetic nearby samples labelled as demo (not live ULB data), plus other tickets filed in this prototype within about 2 km. Ticket status uses a three-step lifecycle: **Pending**, **In Progress**, and **Completed**.
+
+## Public city dashboard
+
+**City dashboard** (`/dashboard`) is a read-only transparency board for citizens. It lists aggregated demonstration tickets (no access keys or citizen PII), department response cards, ward hotspots, and a GHMC ward choropleth coloured by open-issue load. Real tickets filed through the lodge flow appear automatically.
+
+Seed demonstration data locally or on Railway:
+
+```powershell
+$env:PYTHONPATH="backend"
+python -m tools.seed_hyderabad_tickets
+```
+
+Optional env vars:
+
+- `SEED_DEMO_TICKETS=1` — auto-seed on API startup when the store is sparse
+- `DEMO_STATUS_UPDATES=1` — enable `PATCH /api/demo/tickets/{sr_id}/status` for pitch demos only
 
 ## Email the acknowledgement
 

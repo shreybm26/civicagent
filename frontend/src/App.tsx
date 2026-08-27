@@ -11,6 +11,7 @@ import { ReceiptPanel } from "./features/receipt/ReceiptPanel";
 import { LocationConfirmation } from "./features/location/LocationConfirmation";
 import { RemainingFieldsForm } from "./features/fields/RemainingFieldsForm";
 import { TrackPage } from "./features/track/TrackPage";
+import { DashboardPage } from "./features/dashboard/DashboardPage";
 
 const FONT_STEPS = ["15px", "16px", "18px"];
 
@@ -29,6 +30,8 @@ export default function App() {
   const [avatarState, setAvatarState] = useState<AvatarState>("idle");
   const successTimerRef = useRef<number | null>(null);
   const onTrackPage = path === "/track";
+  const onDashboardPage = path === "/dashboard";
+  const onStandalonePage = onTrackPage || onDashboardPage;
 
   function go(next: string) {
     window.history.pushState({}, "", next);
@@ -44,7 +47,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (onTrackPage) return;
+    if (onStandalonePage) return;
     if (session) return;
     setPendingAction("starting");
     setAvatarState("processing");
@@ -59,7 +62,7 @@ export default function App() {
         setAvatarState("error");
       })
       .finally(() => setPendingAction(null));
-  }, [onTrackPage, session]);
+  }, [onStandalonePage, session]);
 
   useEffect(() => {
     document.documentElement.lang = hindi ? "hi" : "en";
@@ -125,7 +128,7 @@ export default function App() {
     }, "That message could not be recorded. Try again.", "recording");
   }
 
-  if (!onTrackPage && !session) {
+  if (!onStandalonePage && !session) {
     return (
       <div className="gov-shell">
         <UtilityBar hindi={false} onLanguage={() => undefined} onFont={() => undefined} fontStep={1} />
@@ -252,12 +255,12 @@ export default function App() {
         stateLabel={stateLabel || session?.state || "Tracking"}
         onReset={() => session && run(() => api.reset(session.session_id), "Reset failed.", "resetting")}
         busy={busy}
-        showReset={!onTrackPage}
+        showReset={!onStandalonePage}
       />
       <nav className="gov-nav" aria-label="Primary">
         <a
           href="/"
-          aria-current={onTrackPage ? undefined : "page"}
+          aria-current={onStandalonePage ? undefined : "page"}
           onClick={(event) => {
             event.preventDefault();
             go("/");
@@ -275,6 +278,16 @@ export default function App() {
         >
           {hindi ? "आवेदन ट्रैक करें" : "Track application"}
         </a>
+        <a
+          href="/dashboard"
+          aria-current={onDashboardPage ? "page" : undefined}
+          onClick={(event) => {
+            event.preventDefault();
+            go("/dashboard");
+          }}
+        >
+          {hindi ? "शहर डैशबोर्ड" : "City dashboard"}
+        </a>
         <span>{hindi ? "सेवाएँ" : "Services"}</span>
         <span>{hindi ? "सहायता" : "Helpline"}</span>
       </nav>
@@ -286,6 +299,8 @@ export default function App() {
       <main id="main" className="page">
         {onTrackPage ? (
           <TrackPage hindi={hindi} initialSrId={session?.receipt?.reference || ""} />
+        ) : onDashboardPage ? (
+          <DashboardPage hindi={hindi} onTrack={() => go("/track")} />
         ) : session ? (
           <>
             <p className="breadcrumb">

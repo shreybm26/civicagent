@@ -7,7 +7,7 @@ create table if not exists public.grievances (
   key_hash text not null,
   service_id text not null,
   department text not null,
-  status text not null default 'Received',
+  status text not null default 'pending',
   payload jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now()
 );

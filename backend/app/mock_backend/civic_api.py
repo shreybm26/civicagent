@@ -40,7 +40,7 @@ class MockCivicBackend:
         reference = f"{id_prefix}-{timestamp:%Y%m%d}-{self._sequence:04d}-{nonce}"
         return Receipt(
             reference=reference,
-            status="Received",
+            status="pending",
             department=department,
             timestamp=timestamp,
         )

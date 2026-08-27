@@ -76,7 +76,7 @@ def test_full_pothole_api_path_and_schema_switch() -> None:
     )
     assert tracked.status_code == 200
     assert tracked.json()["sr_id"] == receipt["reference"]
-    assert tracked.json()["status"] == "Received"
+    assert tracked.json()["status"] == "Pending"
     assert "access_key" not in tracked.json()
     assert "key_hash" not in tracked.json()
 

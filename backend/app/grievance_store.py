@@ -23,7 +23,7 @@ from typing import Any, Protocol
 
 import httpx
 
-from .contracts import Receipt, SessionState, TrackingField, TrackingView
+from .contracts import Receipt, SessionState, TicketStatus, TrackingField, TrackingView, normalize_ticket_status, ticket_status_label
 
 ACCESS_KEY_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
@@ -50,7 +50,11 @@ class GrievanceStore(Protocol):
 
     def get(self, sr_id: str) -> StoredGrievance | None: ...
 
-    def list_recent(self, limit: int = 200) -> list[StoredGrievance]: ...
+    def list_recent(self, limit: int = 500) -> list[StoredGrievance]: ...
+
+    def update_status(self, sr_id: str, status: TicketStatus) -> StoredGrievance | None: ...
+
+    def count(self) -> int: ...
 
 
 def generate_access_key() -> str:
@@ -131,7 +135,8 @@ def tracking_view_from_record(record: StoredGrievance) -> TrackingView:
     address = location.get("address") if location else None
     return TrackingView(
         sr_id=record.sr_id,
-        status=record.status,
+        status=ticket_status_label(record.status),
+        status_key=normalize_ticket_status(record.status),
         department=record.department,
         service_id=record.service_id,
         submitted_at=record.created_at,
@@ -157,11 +162,32 @@ class MemoryGrievanceStore:
         with self._lock:
             return self._rows.get(normalize_sr_id(sr_id))
 
-    def list_recent(self, limit: int = 200) -> list[StoredGrievance]:
+    def list_recent(self, limit: int = 500) -> list[StoredGrievance]:
         with self._lock:
             rows = list(self._rows.values())
         rows.sort(key=lambda row: row.created_at, reverse=True)
         return rows[:limit]
+
+    def update_status(self, sr_id: str, status: TicketStatus) -> StoredGrievance | None:
+        with self._lock:
+            record = self._rows.get(normalize_sr_id(sr_id))
+            if record is None:
+                return None
+            updated = StoredGrievance(
+                sr_id=record.sr_id,
+                key_hash=record.key_hash,
+                service_id=record.service_id,
+                department=record.department,
+                status=status,
+                payload=record.payload,
+                created_at=record.created_at,
+            )
+            self._rows[record.sr_id] = updated
+            return updated
+
+    def count(self) -> int:
+        with self._lock:
+            return len(self._rows)
 
 
 class SqliteGrievanceStore:
@@ -234,7 +260,7 @@ class SqliteGrievanceStore:
             created_at=row["created_at"],
         )
 
-    def list_recent(self, limit: int = 200) -> list[StoredGrievance]:
+    def list_recent(self, limit: int = 500) -> list[StoredGrievance]:
         with self._lock, self._connect() as connection:
             rows = connection.execute(
                 "SELECT * FROM grievances ORDER BY created_at DESC LIMIT ?",
@@ -252,6 +278,29 @@ class SqliteGrievanceStore:
             )
             for row in rows
         ]
+
+    def update_status(self, sr_id: str, status: TicketStatus) -> StoredGrievance | None:
+        normalized = normalize_sr_id(sr_id)
+        try:
+            with self._lock, self._connect() as connection:
+                row = connection.execute(
+                    "SELECT * FROM grievances WHERE sr_id = ?",
+                    (normalized,),
+                ).fetchone()
+                if row is None:
+                    return None
+                connection.execute(
+                    "UPDATE grievances SET status = ? WHERE sr_id = ?",
+                    (status, normalized),
+                )
+        except sqlite3.Error as exc:
+            raise GrievanceStoreError("The tracking record could not be updated.") from exc
+        return self.get(normalized)
+
+    def count(self) -> int:
+        with self._lock, self._connect() as connection:
+            row = connection.execute("SELECT COUNT(*) AS total FROM grievances").fetchone()
+        return int(row["total"]) if row else 0
 
 
 class SupabaseGrievanceStore:
@@ -315,7 +364,7 @@ class SupabaseGrievanceStore:
             created_at=row["created_at"],
         )
 
-    def list_recent(self, limit: int = 200) -> list[StoredGrievance]:
+    def list_recent(self, limit: int = 500) -> list[StoredGrievance]:
         try:
             response = httpx.get(
                 f"{self._url}/rest/v1/grievances",
@@ -339,6 +388,53 @@ class SupabaseGrievanceStore:
             )
             for row in response.json()
         ]
+
+    def update_status(self, sr_id: str, status: TicketStatus) -> StoredGrievance | None:
+        normalized = normalize_sr_id(sr_id)
+        try:
+            response = httpx.patch(
+                f"{self._url}/rest/v1/grievances",
+                headers={**self._headers, "Prefer": "return=representation"},
+                params={"sr_id": f"eq.{normalized}"},
+                json={"status": status},
+                timeout=self._timeout,
+            )
+        except httpx.HTTPError as exc:
+            raise GrievanceStoreError("The tracking service is temporarily unavailable.") from exc
+        if response.status_code >= 400:
+            raise GrievanceStoreError("The tracking record could not be updated.")
+        rows = response.json()
+        if not rows:
+            return None
+        row = rows[0]
+        return _row_to_record(
+            sr_id=row["sr_id"],
+            key_hash=row["key_hash"],
+            service_id=row["service_id"],
+            department=row["department"],
+            status=row["status"],
+            payload=row.get("payload") or {},
+            created_at=row["created_at"],
+        )
+
+    def count(self) -> int:
+        try:
+            response = httpx.get(
+                f"{self._url}/rest/v1/grievances",
+                headers={**self._headers, "Prefer": "count=exact"},
+                params={"select": "sr_id", "limit": "1"},
+                timeout=self._timeout,
+            )
+        except httpx.HTTPError as exc:
+            raise GrievanceStoreError("The tracking service is temporarily unavailable.") from exc
+        if response.status_code >= 400:
+            raise GrievanceStoreError("The tracking service is temporarily unavailable.")
+        content_range = response.headers.get("content-range", "")
+        if "/" in content_range:
+            total = content_range.split("/")[-1]
+            if total.isdigit():
+                return int(total)
+        return len(response.json())
 
 
 def _row_to_record(

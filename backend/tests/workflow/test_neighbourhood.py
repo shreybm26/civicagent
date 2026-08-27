@@ -39,13 +39,19 @@ def test_coords_from_payload_reads_location_pin() -> None:
     assert coords_from_payload({"location": None}) is None
 
 
-def test_demo_timeline_keeps_ward_assignment_pending() -> None:
-    steps = demo_timeline(datetime(2026, 8, 27, 12, 0, tzinfo=timezone.utc))
-    assert [step.id for step in steps] == ["received", "logged", "ward"]
+def test_demo_timeline_reflects_pending_status() -> None:
+    steps = demo_timeline(datetime(2026, 8, 27, 12, 0, tzinfo=timezone.utc), "pending")
+    assert [step.id for step in steps] == ["received", "logged", "in_progress", "completed"]
     assert steps[0].done is True
     assert steps[1].done is True
     assert steps[2].done is False
-    assert steps[2].at is None
+    assert steps[3].done is False
+
+
+def test_demo_timeline_marks_completed_when_resolved() -> None:
+    steps = demo_timeline(datetime(2026, 8, 27, 12, 0, tzinfo=timezone.utc), "completed")
+    assert steps[-1].done is True
+    assert steps[-2].done is True
 
 
 def test_filed_nearby_only_includes_reports_within_two_km() -> None:
@@ -65,7 +71,7 @@ def test_assemble_tracking_view_mixes_synthetic_and_filed_without_keys() -> None
     dumped = view.model_dump()
     assert "access_key" not in dumped
     assert "key_hash" not in dumped
-    assert len(view.timeline) == 3
+    assert len(view.timeline) == 4
     assert any(item.source == "demonstration" for item in view.nearby)
     assert any(item.source == "filed" and item.service_id == "streetlight_issue" for item in view.nearby)
     assert any(item.count > 0 for item in view.type_counts)

@@ -37,6 +37,31 @@ MessageRole = Literal["citizen", "agent", "system"]
 FieldSource = Literal["citizen", "correction", "conversation", "photo", "location", "schema"]
 FieldStatus = Literal["missing", "candidate", "accepted", "rejected"]
 
+TicketStatus = Literal["pending", "in_progress", "completed"]
+
+TICKET_STATUS_LABELS: dict[TicketStatus, str] = {
+    "pending": "Pending",
+    "in_progress": "In Progress",
+    "completed": "Completed",
+}
+
+
+def normalize_ticket_status(value: str) -> TicketStatus:
+    """Map stored status strings to the canonical three-state lifecycle."""
+
+    normalized = value.strip().lower().replace(" ", "_")
+    if normalized in ("pending", "received"):
+        return "pending"
+    if normalized in ("in_progress", "inprogress"):
+        return "in_progress"
+    if normalized == "completed":
+        return "completed"
+    return "pending"
+
+
+def ticket_status_label(status: str) -> str:
+    return TICKET_STATUS_LABELS.get(normalize_ticket_status(status), "Pending")
+
 
 class ContractModel(BaseModel):
     """Base model that rejects accidental contract drift."""
@@ -290,6 +315,7 @@ class TypeCount(ContractModel):
 class TrackingView(ContractModel):
     sr_id: str
     status: str
+    status_key: TicketStatus = "pending"
     department: str | None = None
     service_id: str | None = None
     submitted_at: datetime
@@ -316,6 +342,48 @@ class TrackEmailIn(TrackIn):
 class EmailSentView(ContractModel):
     sent: bool
     to: str
+
+
+class DemoStatusIn(ContractModel):
+    status: TicketStatus
+
+
+class DepartmentStats(ContractModel):
+    department: str
+    total: int
+    pending: int
+    in_progress: int
+    completed: int
+
+
+class WardStats(ContractModel):
+    ward_id: str
+    ward_name: str
+    total: int
+    pending: int
+    in_progress: int
+    completed: int
+    open_ratio: float = Field(ge=0.0, le=1.0)
+
+
+class DashboardSummary(ContractModel):
+    total: int
+    pending: int
+    in_progress: int
+    completed: int
+    last_updated: datetime
+    departments: list[DepartmentStats]
+    wards: list[WardStats]
+
+
+class PublicTicketRow(ContractModel):
+    ref_masked: str
+    service_id: ServiceId
+    service_label: str
+    ward_name: str
+    department: str
+    status: TicketStatus
+    reported_at: datetime
 
 
 def idle_session(session_id: UUID) -> SessionState:

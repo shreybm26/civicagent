@@ -84,6 +84,10 @@ def create_app(runtime_settings: Settings = settings) -> FastAPI:
         )
     )
     _mount_frontend(app)
+    if runtime_settings.seed_demo_tickets:
+        from tools.seed_hyderabad_tickets import seed_hyderabad_tickets
+
+        seed_hyderabad_tickets(grievance_store)
     app.state.session_store = store
     app.state.conversation_provider = provider
     app.state.workflow = workflow

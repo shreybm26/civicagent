@@ -116,7 +116,9 @@ function TrackingResult({
       />
       <dl>
         <dt>{hindi ? "वर्तमान स्थिति" : "Current status"}</dt>
-        <dd>{record.status}</dd>
+        <dd>
+          <span className={statusClass(record.status_key || record.status)}>{record.status}</span>
+        </dd>
         <dt>{hindi ? "विभाग" : "Department"}</dt>
         <dd>{record.department || (hindi ? "नागरिक सेवाएँ" : "Civic services")}</dd>
         <dt>{hindi ? "दर्ज समय" : "Submitted"}</dt>
@@ -209,11 +211,19 @@ function TrackingResult({
   );
 }
 
+function statusClass(status: string): string {
+  const normalized = status.toLowerCase().replace(/\s+/g, "_");
+  if (normalized === "in_progress") return "status-badge status-badge--in_progress";
+  if (normalized === "completed") return "status-badge status-badge--completed";
+  return "status-badge status-badge--pending";
+}
+
 function timelineTitle(id: string, fallback: string, hindi: boolean): string {
   if (!hindi) return fallback;
   if (id === "received") return "प्राप्त";
   if (id === "logged") return "डेमो नागरिक प्रकोष्ठ में दर्ज";
-  if (id === "ward") return "वार्ड आवंटन की प्रतीक्षा";
+  if (id === "in_progress") return "विभाग के साथ प्रगति पर";
+  if (id === "completed") return "पूर्ण";
   return fallback;
 }
 
@@ -221,7 +231,8 @@ function timelineDetail(id: string, fallback: string, hindi: boolean): string {
   if (!hindi) return fallback;
   if (id === "received") return "इस प्रदर्शन नागरिक प्रकोष्ठ के लिए पावती बनाई गई।";
   if (id === "logged") return "दर्ज विवरण ट्रैकिंग के लिए संग्रहीत हैं। किसी लाइव विभाग को सूचना नहीं गई।";
-  if (id === "ward") return "प्रोटोटाइप में यह चरण लंबित रहता है। उत्पादन में यहाँ ULB API होता।";
+  if (id === "in_progress") return "निर्दिष्ट विभाग इस डेमो टिकट पर काम कर रहा है।";
+  if (id === "completed") return "यह डेमो टिकट हल के रूप में चिह्नित है।";
   return fallback;
 }
 

@@ -7,7 +7,7 @@ from hashlib import sha256
 from math import asin, cos, radians, sin, sqrt
 from typing import Any
 
-from .contracts import NearbyReport, TimelineStep, TrackingView, TypeCount
+from .contracts import NearbyReport, TimelineStep, TrackingView, TypeCount, normalize_ticket_status, ticket_status_label
 from .grievance_store import StoredGrievance, tracking_view_from_record
 
 SERVICE_LABELS = {
@@ -42,9 +42,12 @@ def coords_from_payload(payload: dict[str, Any]) -> tuple[float, float] | None:
         return None
 
 
-def demo_timeline(submitted_at: datetime) -> list[TimelineStep]:
+def demo_timeline(submitted_at: datetime, status: str) -> list[TimelineStep]:
     stamped = submitted_at if submitted_at.tzinfo else submitted_at.replace(tzinfo=timezone.utc)
     logged = stamped + timedelta(minutes=2)
+    canonical = normalize_ticket_status(status)
+    in_progress_at = logged + timedelta(hours=6) if canonical in ("in_progress", "completed") else None
+    completed_at = logged + timedelta(days=2) if canonical == "completed" else None
     return [
         TimelineStep(
             id="received",
@@ -61,11 +64,18 @@ def demo_timeline(submitted_at: datetime) -> list[TimelineStep]:
             done=True,
         ),
         TimelineStep(
-            id="ward",
-            title="Awaiting ward assignment",
-            detail="This step stays pending in the prototype. A production ULB API would sit here.",
-            at=None,
-            done=False,
+            id="in_progress",
+            title="In progress with department",
+            detail="The assigned department is working on this demonstration ticket.",
+            at=in_progress_at,
+            done=canonical in ("in_progress", "completed"),
+        ),
+        TimelineStep(
+            id="completed",
+            title="Completed",
+            detail="This demonstration ticket is marked resolved. A production ULB would confirm closure with the citizen.",
+            at=completed_at,
+            done=canonical == "completed",
         ),
     ]
 
@@ -89,7 +99,7 @@ def synthetic_nearby(lat: float, lng: float, origin_sr: str) -> list[NearbyRepor
                 service_id=service_id,
                 label=SERVICE_LABELS[service_id],
                 distance_km=round(distance, 2),
-                status="Received",
+                status=ticket_status_label("pending"),
                 source="demonstration",
                 count=count,
             )
@@ -117,7 +127,7 @@ def filed_nearby(origin: StoredGrievance, others: list[StoredGrievance]) -> list
                 service_id=record.service_id,
                 label=SERVICE_LABELS.get(record.service_id, record.service_id),
                 distance_km=round(distance, 2),
-                status=record.status,
+                status=ticket_status_label(record.status),
                 source="filed",
                 count=1,
             )
@@ -147,7 +157,7 @@ def assemble_tracking_view(record: StoredGrievance, others: list[StoredGrievance
         nearby = synthetic_nearby(coords[0], coords[1], record.sr_id) + nearby
     return core.model_copy(
         update={
-            "timeline": demo_timeline(record.created_at),
+            "timeline": demo_timeline(record.created_at, record.status),
             "nearby": nearby,
             "type_counts": type_counts(nearby, record.service_id),
         }

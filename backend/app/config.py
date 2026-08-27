@@ -87,6 +87,8 @@ class Settings:
     public_base_url: str = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
     image_confidence_threshold: float = _float_env("IMAGE_CONFIDENCE_THRESHOLD", 0.7)
     schema_count: int = 5
+    demo_status_updates: bool = os.getenv("DEMO_STATUS_UPDATES", "").strip() == "1"
+    seed_demo_tickets: bool = os.getenv("SEED_DEMO_TICKETS", "").strip() == "1"
 
     @property
     def known_service_ids(self) -> tuple[ServiceId, ...]:

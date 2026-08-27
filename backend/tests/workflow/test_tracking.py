@@ -47,7 +47,7 @@ def test_sqlite_store_persists_hash_not_plaintext(tmp_path: Path) -> None:
     store = SqliteGrievanceStore(tmp_path / "grievances.db")
     state = _state_with_fields()
     schema = mock_service_schemas()["road_issue"]
-    receipt = Receipt(reference="CIV-20260827-0001-TEST", status="Received", department=schema.department)
+    receipt = Receipt(reference="CIV-20260827-0001-TEST", status="pending", department=schema.department)
     access_key = persist_submission(
         store,
         state=state,
@@ -106,9 +106,9 @@ def test_track_api_round_trip_uses_isolated_sqlite(tmp_path: Path) -> None:
     assert any(field["id"] == "location" for field in body["fields"])
     assert "access_key" not in body
     assert "key_hash" not in body
-    assert [step["id"] for step in body["timeline"]] == ["received", "logged", "ward"]
+    assert [step["id"] for step in body["timeline"]] == ["received", "logged", "in_progress", "completed"]
     assert body["timeline"][0]["done"] is True
-    assert body["timeline"][2]["done"] is False
+    assert body["timeline"][-1]["done"] is False
     assert any(item["source"] == "demonstration" for item in body["nearby"])
     assert any(item["count"] >= 1 for item in body["type_counts"])
 
@@ -120,7 +120,7 @@ def test_supabase_store_uses_service_role_and_never_returns_key() -> None:
         "key_hash": hash_access_key("AAAA-BBBB-CCCC", PEPPER),
         "service_id": "road_issue",
         "department": "Roads",
-        "status": "Received",
+        "status": "pending",
         "payload": {"fields": [{"id": "location", "value": "JNTU"}]},
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -392,7 +392,7 @@ def test_sqlite_list_recent_returns_newest_first(tmp_path: Path) -> None:
         department=schema.department,
         receipt=Receipt(
             reference="CIV-OLD",
-            status="Received",
+            status="pending",
             department=schema.department,
             timestamp=datetime(2026, 8, 1, 10, 0, tzinfo=timezone.utc),
         ),
@@ -405,7 +405,7 @@ def test_sqlite_list_recent_returns_newest_first(tmp_path: Path) -> None:
         department=schema.department,
         receipt=Receipt(
             reference="CIV-NEW",
-            status="Received",
+            status="pending",
             department=schema.department,
             timestamp=datetime(2026, 8, 2, 10, 0, tzinfo=timezone.utc),
         ),

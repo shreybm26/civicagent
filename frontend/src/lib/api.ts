@@ -1,4 +1,4 @@
-import type { EmailSentView, SessionView, TrackingView } from "./types";
+import type { DashboardSummary, EmailSentView, PublicTicketRow, SessionView, TrackingView } from "./types";
 
 export type CivicApi = {
   createSession(): Promise<SessionView>;
@@ -12,6 +12,9 @@ export type CivicApi = {
   reset(id: string): Promise<SessionView>;
   track(srId: string, accessKey: string): Promise<TrackingView>;
   sendTrackEmail(srId: string, accessKey: string, email: string, confirmSend: boolean): Promise<EmailSentView>;
+  dashboardSummary(): Promise<DashboardSummary>;
+  dashboardTickets(status?: string, limit?: number): Promise<PublicTicketRow[]>;
+  dashboardWardMap(): Promise<GeoJSON.FeatureCollection>;
 };
 
 export class CivicApiError extends Error {
@@ -112,6 +115,15 @@ export const api: CivicApi = {
         confirm_send: confirmSend,
       }),
     }),
+  dashboardSummary: () => callJson<DashboardSummary>("/api/public/dashboard/summary"),
+  dashboardTickets: (status, limit = 50) => {
+    const params = new URLSearchParams();
+    if (status) params.set("status", status);
+    params.set("limit", String(limit));
+    const query = params.toString();
+    return callJson<PublicTicketRow[]>(`/api/public/dashboard/tickets${query ? `?${query}` : ""}`);
+  },
+  dashboardWardMap: () => callJson<GeoJSON.FeatureCollection>("/api/public/dashboard/ward-map"),
 };
 
 export function isExpiredSession(error: unknown): boolean {

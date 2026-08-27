@@ -13,6 +13,8 @@ from .config import Settings
 from .contracts import (
     CivicError,
     ConfirmIn,
+    DashboardSummary,
+    DemoStatusIn,
     EmailSentView,
     FieldEditIn,
     LocationIn,
@@ -20,11 +22,14 @@ from .contracts import (
     MediaDecisionIn,
     Message,
     MessageIn,
+    PublicTicketRow,
     SessionView,
+    TicketStatus,
     TrackEmailIn,
     TrackIn,
     TrackingView,
 )
+from .dashboard import build_public_tickets, build_summary, build_ward_map_geojson
 from .grievance_store import (
     GrievanceStore,
     GrievanceStoreError,
@@ -228,6 +233,65 @@ def build_api_router(
                 detail=_error("EMAIL_FAILED", message, retryable),
             ) from exc
         return EmailSentView(sent=True, to=to_email)
+
+    @router.get("/api/public/dashboard/summary", response_model=DashboardSummary)
+    def dashboard_summary() -> DashboardSummary:
+        try:
+            records = grievance_store.list_recent(500)
+        except GrievanceStoreError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=_error("DASHBOARD_UNAVAILABLE", str(exc), True),
+            ) from exc
+        return build_summary(records)
+
+    @router.get("/api/public/dashboard/tickets", response_model=list[PublicTicketRow])
+    def dashboard_tickets(status: TicketStatus | None = None, limit: int = 50) -> list[PublicTicketRow]:
+        capped = min(max(limit, 1), 100)
+        try:
+            records = grievance_store.list_recent(500)
+        except GrievanceStoreError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=_error("DASHBOARD_UNAVAILABLE", str(exc), True),
+            ) from exc
+        return build_public_tickets(records, status_filter=status, limit=capped)
+
+    @router.get("/api/public/dashboard/ward-map")
+    def dashboard_ward_map() -> dict[str, object]:
+        try:
+            records = grievance_store.list_recent(500)
+        except GrievanceStoreError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=_error("DASHBOARD_UNAVAILABLE", str(exc), True),
+            ) from exc
+        return build_ward_map_geojson(records)
+
+    @router.patch("/api/demo/tickets/{sr_id}/status", response_model=TrackingView)
+    def demo_update_ticket_status(sr_id: str, body: DemoStatusIn) -> TrackingView:
+        if not settings.demo_status_updates:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=_error(
+                    "DEMO_STATUS_DISABLED",
+                    "Demo status updates are disabled. Set DEMO_STATUS_UPDATES=1 to enable.",
+                    False,
+                ),
+            )
+        try:
+            updated = grievance_store.update_status(sr_id, body.status)
+        except GrievanceStoreError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=_error("TRACK_UNAVAILABLE", str(exc), True),
+            ) from exc
+        if updated is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=_error("TRACK_NOT_FOUND", "Service request not found.", False),
+            )
+        return _enriched_tracking_view(grievance_store, updated)
 
     return router
 
