@@ -42,7 +42,7 @@ export function ChatPanel({
   const [awayFromLatest, setAwayFromLatest] = useState(false);
   const [pendingCitizen, setPendingCitizen] = useState<string | null>(null);
   const [, setStreamTick] = useState(0);
-  const [anchoredStep, setAnchoredStep] = useState<string | null>(null);
+  const [stepReady, setStepReady] = useState(false);
   const endRef = useRef<HTMLDivElement | null>(null);
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const nearBottomRef = useRef(true);
@@ -73,26 +73,40 @@ export function ChatPanel({
     !busy && !pendingCitizen && latest && latest.role === "agent" && !completedRef.current.has(latestKey),
   );
 
+  // Never show location/photo/review widgets until the latest agent reply finishes streaming.
   useEffect(() => {
-    if (!contextualStep || !contextualKey) {
-      setAnchoredStep(null);
-      return;
-    }
-    if (!needsStream) setAnchoredStep(contextualKey);
-  }, [contextualStep, contextualKey, needsStream]);
-
-  const showContextual = Boolean(contextualStep) && Boolean(contextualKey) && anchoredStep === contextualKey;
+    setStepReady(false);
+  }, [contextualKey]);
 
   useEffect(() => {
+    if (!contextualStep || !contextualKey || busy || needsStream) return;
+    setStepReady(true);
+  }, [contextualStep, contextualKey, busy, needsStream]);
+
+  const showContextual = Boolean(contextualStep) && Boolean(contextualKey) && stepReady;
+
+  function stickMessagesToBottom() {
     const box = messagesRef.current;
-    if (!box) return;
+    if (!box || !nearBottomRef.current) return;
+    // Scroll only the chat transcript — never the whole page (scrollIntoView was yanking to the top).
+    box.scrollTop = box.scrollHeight;
+  }
+
+  useEffect(() => {
     if (!nearBottomRef.current) {
       setAwayFromLatest(true);
       return;
     }
-    endRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
+    stickMessagesToBottom();
     setAwayFromLatest(false);
   }, [displayMessages.length, busy, needsStream, showContextual, pendingAction, pendingCitizen]);
+
+  // Keep the transcript pinned while the agent is typing characters.
+  useEffect(() => {
+    if (!needsStream || !nearBottomRef.current) return;
+    const id = window.setInterval(() => stickMessagesToBottom(), 120);
+    return () => window.clearInterval(id);
+  }, [needsStream]);
 
   function onScroll() {
     const box = messagesRef.current;
@@ -114,16 +128,14 @@ export function ChatPanel({
 
   function jumpLatest() {
     nearBottomRef.current = true;
-    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    stickMessagesToBottom();
     setAwayFromLatest(false);
   }
 
   function finishStream(key: string) {
     completedRef.current.add(key);
     setStreamTick((tick) => tick + 1);
-    if (nearBottomRef.current) {
-      endRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
-    }
+    if (nearBottomRef.current) stickMessagesToBottom();
   }
 
   const activity = activityLabel(pendingAction, hindi);

@@ -57,8 +57,11 @@ def test_irrelevant_image_is_evidence_but_does_not_fill_fields() -> None:
     )
 
     assert result.state.state == "COLLECTING"
+    assert result.state.image_decision == "pending"
     assert result.state.evidence[-1].relevant is False
     assert next(field for field in result.state.fields if field.id == "severity").value is None
+    assert "not look relevant" in result.message.lower()
+    assert "no image" in result.message.lower()
 
 
 def test_confirmation_requires_review_and_receipt_gates_completion() -> None:

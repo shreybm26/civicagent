@@ -28,22 +28,14 @@
       "id": "leak_type",
       "type": "choice",
       "required": true,
-      "options": [
-        "pipe",
-        "tap",
-        "supply",
-        "unknown"
-      ]
+      "options": ["pipe", "tap", "supply", "unknown"],
+      "image_derivable": true
     },
     {
       "id": "severity",
       "type": "choice",
       "required": true,
-      "options": [
-        "low",
-        "medium",
-        "high"
-      ],
+      "options": ["low", "medium", "high"],
       "image_derivable": true
     },
     {
@@ -53,6 +45,12 @@
     },
     {
       "id": "additional_details",
+      "type": "text",
+      "required": false,
+      "image_derivable": true
+    },
+    {
+      "id": "landmark",
       "type": "text",
       "required": false,
       "image_derivable": true

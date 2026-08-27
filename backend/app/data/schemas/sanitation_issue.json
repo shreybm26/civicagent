@@ -28,12 +28,8 @@
       "id": "issue_type",
       "type": "choice",
       "required": true,
-      "options": [
-        "sewage",
-        "drain",
-        "public_hygiene",
-        "other"
-      ]
+      "options": ["sewage", "drain", "public_hygiene", "other"],
+      "image_derivable": true
     },
     {
       "id": "duration",
@@ -47,6 +43,12 @@
     },
     {
       "id": "additional_details",
+      "type": "text",
+      "required": false,
+      "image_derivable": true
+    },
+    {
+      "id": "landmark",
       "type": "text",
       "required": false,
       "image_derivable": true

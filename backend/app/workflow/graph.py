@@ -190,7 +190,9 @@ class WorkflowGraph:
             )
         )
         changed: list[str] = []
+        schema = self.schemas[state.service_id]
         if result.relevant:
+            next_state.image_decision = "added"
             self._set_field(
                 next_state,
                 "photo",
@@ -213,20 +215,61 @@ class WorkflowGraph:
                         reason=candidate.reason,
                         changed=changed,
                     )
-            if result.details:
-                details = "; ".join(f"{detail.label}: {detail.value}" for detail in result.details if detail.confidence >= 0.7)
-                if details and self._field(next_state, "additional_details") is not None:
-                    current = self._field(next_state, "additional_details")
-                    if current is None or current.value in (None, ""):
-                        self._set_field(next_state, "additional_details", details, source="photo", confidence=min(d.confidence for d in result.details), status="candidate", reason="Summary of confident visible details from the uploaded image", changed=changed)
+            landmark_field = schema.field("landmark")
+            if landmark_field is not None:
+                current_landmark = self._field(next_state, "landmark")
+                if current_landmark is None or current_landmark.value in (None, ""):
+                    recovered = _extract_landmark_from_text(
+                        " ".join(
+                            part
+                            for part in [
+                                result.summary or "",
+                                result.reason or "",
+                                *[f"{item.label}: {item.value}" for item in result.details],
+                            ]
+                            if part
+                        )
+                    )
+                    if recovered:
+                        self._set_field(
+                            next_state,
+                            "landmark",
+                            recovered,
+                            source="photo",
+                            confidence=max(result.relevance_confidence, 0.8),
+                            status="candidate",
+                            reason="Visible place name recovered from image analysis",
+                            changed=changed,
+                        )
+            details_text = _civic_additional_details(result)
+            if details_text and self._field(next_state, "additional_details") is not None:
+                current = self._field(next_state, "additional_details")
+                if current is None or current.value in (None, ""):
+                    self._set_field(
+                        next_state,
+                        "additional_details",
+                        details_text,
+                        source="photo",
+                        confidence=min((d.confidence for d in result.details), default=result.relevance_confidence),
+                        status="candidate",
+                        reason="Civic-issue summary from the uploaded image",
+                        changed=changed,
+                    )
+        else:
+            # Keep the rejected photo in evidence/history, but allow another upload or skip.
+            next_state.image_decision = "pending"
 
         result_state, _ = self._finish_collection(next_state)
-        if result_state.state == "REVIEWING":
+        if not result.relevant:
+            why = (result.reason or "It does not show the reported civic issue clearly.").strip()
+            message = (
+                f"That photo does not look relevant to this {schema.service_name}. {why} "
+                "Please upload a correct photo of the issue, or choose No image to continue without one."
+            )
+        elif result_state.state == "REVIEWING":
             message = f"{result.reason} Please review the completed details below."
-        elif result.relevant:
-            message = f"{result.reason} Please complete the remaining details."
         else:
-            message = f"{result.reason} No form fields were filled from this image. Please complete the remaining details."
+            message = f"{result.reason} Please complete the remaining details."
         return WorkflowResult(
             state=result_state,
             message=message,
@@ -508,3 +551,62 @@ class WorkflowGraph:
             confidence=result.confidence,
             status="accepted",
         )
+
+
+def _is_noise_civic_detail(label: str, value: str) -> bool:
+    """Drop ad copy / phone spam that is not useful for a civic grievance."""
+
+    import re
+
+    blob = f"{label} {value}".lower()
+    if "advertise" in blob or "to advertise" in blob:
+        return True
+    if re.search(r"\b(call|contact|whatsapp)\b", blob) and re.search(r"\d{3,}", blob):
+        return True
+    if re.search(r"\b\d{3,5}[\s-]?\d{3,5}[\s-]?\d{3,5}\b", blob):
+        return True
+    return False
+
+
+def _civic_additional_details(result: Any) -> str | None:
+    """Prefer a task-focused summary; otherwise join only civic-useful details."""
+
+    summary = getattr(result, "summary", None)
+    if isinstance(summary, str) and summary.strip():
+        return summary.strip()
+    details = getattr(result, "details", None) or []
+    parts: list[str] = []
+    for detail in details:
+        if getattr(detail, "confidence", 0) < 0.7:
+            continue
+        label = str(getattr(detail, "label", "") or "")
+        value = str(getattr(detail, "value", "") or "")
+        if not label or not value or _is_noise_civic_detail(label, value):
+            continue
+        parts.append(f"{label}: {value}")
+    return "; ".join(parts) if parts else None
+
+
+def _extract_landmark_from_text(blob: str) -> str | None:
+    """Recover a visible place name when analysis prose mentions it but landmark was not filled."""
+
+    import re
+
+    if not blob.strip():
+        return None
+    for match in re.finditer(r"['\"]([A-Z][^'\"]{1,80})['\"]", blob):
+        candidate = match.group(1).strip(" .,;:")
+        if candidate and not _is_noise_civic_detail("landmark", candidate):
+            return candidate
+    match = re.search(
+        r"(?:in front of|near|beside|outside|next to)\s+(?:the\s+)?['\"]?([A-Z][A-Za-z0-9 .&'/,-]{1,60})",
+        blob,
+    )
+    if not match:
+        return None
+    candidate = match.group(1).strip(" .,;:")
+    candidate = re.sub(r"\b(building|mall|complex|road|street)\b\.?$", "", candidate, flags=re.I).strip(" .,;:")
+    if candidate and not _is_noise_civic_detail("landmark", candidate):
+        return candidate
+    return None
+

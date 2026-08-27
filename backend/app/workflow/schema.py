@@ -77,7 +77,15 @@ def mock_service_schemas() -> dict[ServiceId, ServiceSchema]:
             "Report garbage accumulation or missed collection",
             "Sanitation Services",
             ("garbage", "trash", "waste", "dump", "litter"),
-            (location(), text("description", True), choice("severity", ("low", "medium", "high"), True), text("duration"), image(), additional()),
+            (
+                location(),
+                text("description", True),
+                choice("severity", ("low", "medium", "high"), True, True),
+                text("duration"),
+                image(),
+                additional(),
+                text("landmark", False, True),
+            ),
         ),
         "streetlight_issue": ServiceSchema(
             "streetlight_issue",
@@ -85,7 +93,16 @@ def mock_service_schemas() -> dict[ServiceId, ServiceSchema]:
             "Report a broken or inactive streetlight",
             "Electrical Services",
             ("streetlight", "street light", "lamp", "pole", "light"),
-            (location(), text("description", True), text("pole_number"), text("duration", True), text("time_noticed"), additional()),
+            (
+                location(),
+                text("description", True),
+                text("pole_number", False, True),
+                text("duration", True),
+                text("time_noticed"),
+                image(),
+                additional(),
+                text("landmark", False, True),
+            ),
         ),
         "water_issue": ServiceSchema(
             "water_issue",
@@ -93,7 +110,15 @@ def mock_service_schemas() -> dict[ServiceId, ServiceSchema]:
             "Report a water leak or supply infrastructure problem",
             "Water Services",
             ("water", "leak", "pipe", "burst", "supply"),
-            (location(), text("description", True), choice("leak_type", ("pipe", "tap", "supply", "unknown"), True), choice("severity", ("low", "medium", "high"), True), image(), additional()),
+            (
+                location(),
+                text("description", True),
+                choice("leak_type", ("pipe", "tap", "supply", "unknown"), True, True),
+                choice("severity", ("low", "medium", "high"), True, True),
+                image(),
+                additional(),
+                text("landmark", False, True),
+            ),
         ),
         "sanitation_issue": ServiceSchema(
             "sanitation_issue",
@@ -101,7 +126,15 @@ def mock_service_schemas() -> dict[ServiceId, ServiceSchema]:
             "Report a sanitation or public hygiene issue",
             "Sanitation Services",
             ("sanitation", "sewage", "drain", "toilet", "hygiene"),
-            (location(), text("description", True), choice("issue_type", ("sewage", "drain", "public_hygiene", "other"), True), text("duration"), image(), additional()),
+            (
+                location(),
+                text("description", True),
+                choice("issue_type", ("sewage", "drain", "public_hygiene", "other"), True, True),
+                text("duration"),
+                image(),
+                additional(),
+                text("landmark", False, True),
+            ),
         ),
     }
 

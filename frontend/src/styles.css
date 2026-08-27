@@ -206,7 +206,7 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
   overflow-anchor: none;
   padding: 16px;
   background: var(--paper);
-  scroll-behavior: smooth;
+  scroll-behavior: auto;
 }
 .bubble {
   display: grid;

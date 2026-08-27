@@ -27,7 +27,8 @@
     {
       "id": "pole_number",
       "type": "text",
-      "required": false
+      "required": false,
+      "image_derivable": true
     },
     {
       "id": "duration",
@@ -40,7 +41,18 @@
       "required": false
     },
     {
+      "id": "photo",
+      "type": "image",
+      "required": false
+    },
+    {
       "id": "additional_details",
+      "type": "text",
+      "required": false,
+      "image_derivable": true
+    },
+    {
+      "id": "landmark",
       "type": "text",
       "required": false,
       "image_derivable": true

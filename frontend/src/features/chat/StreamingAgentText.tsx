@@ -4,8 +4,9 @@ function prefersReducedMotion(): boolean {
   return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
+/** Prefer slow character reveal so replies feel spoken, not flashed. */
 function tokenize(text: string): string[] {
-  return text.split(/(\s+)/).filter((part) => part.length > 0);
+  return Array.from(text);
 }
 
 export function StreamingAgentText({
@@ -48,10 +49,15 @@ export function StreamingAgentText({
         return;
       }
       const just = tokens[index - 1] ?? "";
-      const pause = /[.!?…]["')\]]*$/.test(just.trim()) ? 220 : /[,;:]$/.test(just.trim()) ? 120 : 58;
+      // Deliberately slow: ~38ms/char, longer pauses on punctuation and spaces after sentences.
+      let pause = 38;
+      if (/[.!?…]/.test(just)) pause = 420;
+      else if (/[,;:]/.test(just)) pause = 220;
+      else if (just === " " && /[.!?…]/.test(tokens[index - 2] ?? "")) pause = 160;
+      else if (just === " ") pause = 52;
       timer = window.setTimeout(tick, pause);
     };
-    timer = window.setTimeout(tick, 58);
+    timer = window.setTimeout(tick, 48);
 
     return () => {
       cancelled = true;

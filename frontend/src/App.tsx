@@ -146,7 +146,9 @@ export default function App() {
   const showLocation = session?.state === "LOCATION_REQUIRED" || (session?.state === "COLLECTING" && locationMissing);
   const hasLocation = Boolean(session?.location?.address);
   const latestEvidence = session?.evidence?.at(-1);
-  const imageHandled = session?.image_decision === "skipped" || Boolean(latestEvidence);
+  const imageHandled = session?.image_decision === "skipped" || session?.image_decision === "added";
+  const rejectedReason =
+    !imageHandled && latestEvidence && !latestEvidence.relevant ? latestEvidence.reason : null;
   const stateLabel = session
     ? hindi
       ? STATE_LABEL[session.state]?.hi
@@ -184,7 +186,7 @@ export default function App() {
         />
       );
     } else if (hasLocation && !imageHandled) {
-      contextualKey = `evidence:${session.state}`;
+      contextualKey = `evidence:${session.state}:${rejectedReason ? "retry" : "ask"}`;
       contextualStep = (
         <EvidencePanel
           onChoose={(hasImage) => {
@@ -195,6 +197,7 @@ export default function App() {
           }
           busy={busy}
           hindi={hindi}
+          rejectedReason={rejectedReason}
         />
       );
     } else if (hasLocation && imageHandled && session.state !== "REVIEWING" && session.state !== "COMPLETED") {

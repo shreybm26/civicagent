@@ -190,10 +190,18 @@ class GeminiImageAnalyzer:
             f"{[{'id': field.id, 'type': field.field_type, 'options': list(field.options)} for field in schema.fields if field.image_derivable]}. "
             'Return JSON with relevant (boolean), relevance_confidence (0..1), reason, summary, '
             'details [{label,value,confidence,reason}], and candidates [{field_id,value,confidence,reason}]. '
-            "Return candidates only for facts directly visible in the image. An irrelevant image must return no candidates. "
-            "If a landmark field is available and readable signage, building names, malls, junctions, or landmarks "
-            "are visible (for example 'NEXUS FORUM' or an area name on a board), include a landmark candidate "
-            "with that readable text. Do not invent landmarks that are not visible.",
+            "Set relevant=true only when the image clearly shows this reported civic issue. "
+            "If irrelevant, set relevant=false, explain why in reason (what the image shows vs what was needed), "
+            "and return no candidates. "
+            "When relevant: fill candidates for every image-derivable field you can confidently infer "
+            "(including choice fields such as severity, issue_type, or leak_type using only the allowed options). "
+            "If a landmark field is listed and a readable place name, mall, metro station, junction, or building "
+            "name is visible, you MUST also return a landmark candidate with that exact readable text "
+            "(for example field_id=landmark, value='NEXUS FORUM'). Do not leave landmarks only in the summary. "
+            "summary must be a short civic-report description of the problem only — what is wrong, how severe it looks, "
+            "and useful place landmarks (metro/station/building names that help locate the issue). "
+            "Do NOT include advertising text, phone numbers, marketing slogans, or unrelated signage. "
+            "details must also stay limited to civic-issue facts (damage, waste, leak, hazard, landmark for location).",
             content_type,
             content,
         )
@@ -209,7 +217,11 @@ class GeminiImageAnalyzer:
                 confidence = _confidence(raw.get("confidence")) if isinstance(raw, dict) else 0.0
                 if confidence < self._threshold or not raw.get("label") or not raw.get("value"):
                     continue
-                details.append(ImageDetail(label=str(raw["label"]), value=str(raw["value"]), confidence=confidence, reason=raw.get("reason")))
+                label = str(raw["label"])
+                value = str(raw["value"])
+                if _noise_detail(label, value):
+                    continue
+                details.append(ImageDetail(label=label, value=value, confidence=confidence, reason=raw.get("reason")))
             fields = {field.id: field for field in schema.fields if field.image_derivable}
             for raw in data.get("candidates", []):
                 if not isinstance(raw, dict):
@@ -221,15 +233,82 @@ class GeminiImageAnalyzer:
                     continue
                 if field.options and str(value).lower() not in field.options:
                     continue
+                if field.id == "landmark" and _noise_detail("landmark", str(value)):
+                    continue
                 candidates.append(Candidate(field_id=field.id, value=str(value).lower() if field.options else value, source="photo", confidence=confidence, reason=raw.get("reason")))
+            # If the model described a place in summary/details but omitted the landmark candidate, recover it.
+            if "landmark" in fields and not any(item.field_id == "landmark" for item in candidates):
+                recovered = _recover_landmark(
+                    summary=str(data.get("summary") or ""),
+                    details=details,
+                    reason=str(data.get("reason") or ""),
+                )
+                if recovered:
+                    candidates.append(
+                        Candidate(
+                            field_id="landmark",
+                            value=recovered,
+                            source="photo",
+                            confidence=max(relevance_confidence, 0.8),
+                            reason="Visible place name recovered from image analysis text",
+                        )
+                    )
+        summary = str(data.get("summary")).strip() if data.get("summary") else None
+        if summary and _noise_detail("summary", summary):
+            # Keep place names; strip obvious ad sentences if the whole summary is mostly ads.
+            summary = _strip_ad_sentences(summary)
         return ImageResult(
             relevant=relevant and relevance_confidence >= self._threshold,
             relevance_confidence=relevance_confidence,
             reason=str(data.get("reason") or "Image analysis completed."),
-            summary=str(data.get("summary")) if data.get("summary") else None,
+            summary=summary or None,
             details=details,
             candidates=candidates,
         )
+
+
+def _recover_landmark(*, summary: str, details: list[ImageDetail], reason: str) -> str | None:
+    """Pull a quoted/proper place name out of analysis prose when landmark candidate is missing."""
+
+    import re
+
+    chunks = [summary, reason, *[f"{item.label}: {item.value}" for item in details]]
+    blob = " ".join(part for part in chunks if part).strip()
+    if not blob:
+        return None
+    for match in re.finditer(r"['\"]([A-Z][^'\"]{1,80})['\"]", blob):
+        candidate = match.group(1).strip(" .,;:")
+        if candidate and not _noise_detail("landmark", candidate):
+            return candidate
+    match = re.search(
+        r"(?:in front of|near|beside|outside|next to)\s+(?:the\s+)?['\"]?([A-Z][A-Za-z0-9 .&'/,-]{1,60})",
+        blob,
+    )
+    if match:
+        candidate = match.group(1).strip(" .,;:")
+        candidate = re.sub(r"\b(building|mall|complex|road|street)\b\.?$", "", candidate, flags=re.I).strip(" .,;:")
+        if candidate and not _noise_detail("landmark", candidate):
+            return candidate
+    return None
+
+
+def _noise_detail(label: str, value: str) -> bool:
+    import re
+
+    blob = f"{label} {value}".lower()
+    if "advertise" in blob or "to advertise" in blob:
+        return True
+    if re.search(r"\b(call|contact|whatsapp)\b", blob) and re.search(r"\d{3,}", blob):
+        return True
+    if re.search(r"\b\d{3,5}[\s-]?\d{3,5}[\s-]?\d{3,5}\b", blob) and "metro" not in blob:
+        return True
+    return False
+
+
+def _strip_ad_sentences(text: str) -> str:
+    parts = [part.strip() for part in text.replace("!", ".").split(".") if part.strip()]
+    kept = [part for part in parts if not _noise_detail("summary", part)]
+    return ". ".join(kept).strip() or text
 
 
 def _confidence(value: Any) -> float:

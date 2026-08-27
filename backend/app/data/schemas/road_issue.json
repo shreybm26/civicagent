@@ -31,11 +31,7 @@
       "id": "severity",
       "type": "choice",
       "required": true,
-      "options": [
-        "low",
-        "medium",
-        "high"
-      ],
+      "options": ["low", "medium", "high"],
       "image_derivable": true
     },
     {
@@ -52,7 +48,8 @@
     {
       "id": "landmark",
       "type": "text",
-      "required": false
+      "required": false,
+      "image_derivable": true
     }
   ],
   "submission": {

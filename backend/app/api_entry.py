@@ -130,7 +130,8 @@ def build_api_router(
                 content_type=content_type,
                 content=content,
             )
-            result.state.image_decision = "added"
+            relevant = bool(result.state.evidence and result.state.evidence[-1].relevant)
+            result.state.image_decision = "added" if relevant else "pending"
             result.state.messages.append(Message(role="citizen", text="Uploaded an image.", media_id=media_id))
             result.state.evidence[-1].media_id = media_id
             media_store.set_analysis(media_id, result.state.evidence[-1].model_dump(mode="json"))
