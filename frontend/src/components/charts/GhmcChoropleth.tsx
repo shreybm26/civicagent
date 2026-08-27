@@ -41,15 +41,30 @@ function wardTooltip(props: WardProps): string {
   return `${wardLabel(props)} · ${open} open · ${props.completed ?? 0} resolved · ${cleared}% cleared`;
 }
 
-function frameWardLayer(map: L.Map, layer: L.GeoJSON) {
+function updatePanBounds(map: L.Map, bounds: L.LatLngBounds, baseZoom: number, zoom: number) {
+  const zoomInSteps = Math.max(0, zoom - baseZoom);
+  const pad = 0.05 + zoomInSteps * 0.035;
+  map.setMaxBounds(bounds.pad(pad));
+}
+
+function frameWardLayer(
+  map: L.Map,
+  layer: L.GeoJSON,
+  baseZoomRef: { current: number },
+  boundsRef: { current: L.LatLngBounds | null },
+) {
   const bounds = layer.getBounds();
   if (!bounds.isValid()) return;
-  map.fitBounds(bounds, { padding: [16, 16], animate: false });
+  boundsRef.current = bounds;
+  map.fitBounds(bounds, { padding: [8, 8], animate: false });
   const fittedZoom = map.getZoom();
-  map.setMinZoom(fittedZoom);
-  map.setMaxZoom(fittedZoom + 2);
-  map.setMaxBounds(bounds.pad(0.005));
-  map.options.maxBoundsViscosity = 1;
+  const baseZoom = fittedZoom + 0.08;
+  baseZoomRef.current = baseZoom;
+  map.setView(bounds.getCenter(), baseZoom, { animate: false });
+  map.setMinZoom(baseZoom);
+  map.setMaxZoom(baseZoom + 3);
+  map.options.maxBoundsViscosity = 0.85;
+  updatePanBounds(map, bounds, baseZoom, baseZoom);
 }
 
 export function GhmcChoropleth({
@@ -62,6 +77,8 @@ export function GhmcChoropleth({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.GeoJSON | null>(null);
+  const baseZoomRef = useRef(11);
+  const boundsRef = useRef<L.LatLngBounds | null>(null);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -69,23 +86,48 @@ export function GhmcChoropleth({
     const map = L.map(containerRef.current, {
       center: [17.385, 78.4867],
       zoom: 11,
-      scrollWheelZoom: true,
+      scrollWheelZoom: false,
       zoomControl: true,
       attributionControl: false,
+      zoomSnap: 0.25,
+      zoomDelta: 0.25,
     });
+
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      if (event.deltaY < 0 && map.getZoom() < map.getMaxZoom()) {
+        map.zoomIn();
+      }
+    };
+
+    const onZoomEnd = () => {
+      if (map.getZoom() < baseZoomRef.current) {
+        map.setZoom(baseZoomRef.current);
+        return;
+      }
+      if (boundsRef.current) {
+        updatePanBounds(map, boundsRef.current, baseZoomRef.current, map.getZoom());
+      }
+    };
+
+    containerRef.current.addEventListener("wheel", onWheel, { passive: false });
+    map.on("zoomend", onZoomEnd);
 
     mapRef.current = map;
     const observer = new ResizeObserver(() => {
       map.invalidateSize({ animate: false });
-      if (layerRef.current) frameWardLayer(map, layerRef.current);
+      if (layerRef.current) frameWardLayer(map, layerRef.current, baseZoomRef, boundsRef);
     });
     observer.observe(containerRef.current);
 
     return () => {
+      containerRef.current?.removeEventListener("wheel", onWheel);
+      map.off("zoomend", onZoomEnd);
       observer.disconnect();
       map.remove();
       mapRef.current = null;
       layerRef.current = null;
+      boundsRef.current = null;
     };
   }, []);
 
@@ -126,14 +168,14 @@ export function GhmcChoropleth({
     }).addTo(map);
 
     layerRef.current = layer;
-    frameWardLayer(map, layer);
+    frameWardLayer(map, layer, baseZoomRef, boundsRef);
   }, [data]);
 
   function resetView() {
     const map = mapRef.current;
     const layer = layerRef.current;
     if (!map || !layer) return;
-    frameWardLayer(map, layer);
+    frameWardLayer(map, layer, baseZoomRef, boundsRef);
   }
 
   if (!data) {
@@ -145,7 +187,7 @@ export function GhmcChoropleth({
   }
 
   return (
-    <div className="dashboard-hero dashboard-hero--outline">
+    <section className="dashboard-map-block" aria-label={hindi ? "हैदराबाद वार्ड नक्शा" : "Hyderabad ward map"}>
       <div className="dashboard-map-toolbar">
         <span>
           {hindi
@@ -160,7 +202,7 @@ export function GhmcChoropleth({
         ref={containerRef}
         className="dashboard-hero-map"
         role="img"
-        aria-label={hindi ? "हैदराबाद वार्ड नक्शा" : "Hyderabad ward map"}
+        aria-label={hindi ? "GHMC वार्ड कोरोप्लेथ" : "GHMC ward choropleth"}
       />
       <div className="dashboard-legend" aria-hidden="true">
         <span>{hindi ? "कोई रिपोर्ट नहीं" : "No reports"}</span>
@@ -173,6 +215,6 @@ export function GhmcChoropleth({
         </div>
         <span>{hindi ? "अधिक खुले" : "High open"}</span>
       </div>
-    </div>
+    </section>
   );
 }

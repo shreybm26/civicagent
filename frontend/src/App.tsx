@@ -296,7 +296,7 @@ export default function App() {
           ? "यह एक प्रोटोटाइप है, सरकारी वेबसाइट नहीं। कोई विभाग या भुगतान प्रणाली इससे जुड़ी नहीं है। सभी डेटा काल्पनिक है।"
           : "Prototype only — not an official government website. No department, payment, Aadhaar, or OTP system is connected. All data is synthetic."}
       </p>
-      <main id="main" className="page">
+      <main id="main" className={onDashboardPage ? "page page--dashboard" : "page"}>
         {onTrackPage ? (
           <TrackPage hindi={hindi} initialSrId={session?.receipt?.reference || ""} />
         ) : onDashboardPage ? (

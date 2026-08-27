@@ -9,6 +9,8 @@ const STATUS_FILTERS: Array<{ id: TicketStatus | "all"; labelEn: string; labelHi
   { id: "in_progress", labelEn: "In Progress", labelHi: "प्रगति पर" },
   { id: "completed", labelEn: "Completed", labelHi: "पूर्ण" },
 ];
+const WARD_PREVIEW_COUNT = 10;
+const TICKET_PREVIEW_COUNT = 12;
 
 function relativeDate(value: string, hindi: boolean): string {
   const date = new Date(value);
@@ -39,6 +41,8 @@ export function DashboardPage({ hindi, onTrack }: { hindi: boolean; onTrack: () 
   const [tickets, setTickets] = useState<PublicTicketRow[]>([]);
   const [wardMap, setWardMap] = useState<WardGeoJson | null>(null);
   const [filter, setFilter] = useState<TicketStatus | "all">("all");
+  const [showAllWards, setShowAllWards] = useState(false);
+  const [showAllTickets, setShowAllTickets] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(true);
 
@@ -82,7 +86,22 @@ export function DashboardPage({ hindi, onTrack }: { hindi: boolean; onTrack: () 
       .catch(() => undefined);
   }, [filter]);
 
+  useEffect(() => {
+    setShowAllTickets(false);
+  }, [filter]);
+
   const topWards = useMemo(() => (summary?.wards ?? []).slice(0, 3), [summary]);
+  const visibleWards = useMemo(() => {
+    const wards = summary?.wards ?? [];
+    return showAllWards ? wards : wards.slice(0, WARD_PREVIEW_COUNT);
+  }, [showAllWards, summary?.wards]);
+  const visibleTickets = useMemo(
+    () => (showAllTickets ? tickets : tickets.slice(0, TICKET_PREVIEW_COUNT)),
+    [showAllTickets, tickets],
+  );
+  const wardTotal = summary?.wards.length ?? 0;
+  const hasMoreWards = wardTotal > WARD_PREVIEW_COUNT;
+  const hasMoreTickets = tickets.length > TICKET_PREVIEW_COUNT;
 
   return (
     <>
@@ -167,37 +186,74 @@ export function DashboardPage({ hindi, onTrack }: { hindi: boolean; onTrack: () 
           </section>
 
           <section className="dashboard-ward-table-wrap">
-            <h2>{hindi ? "वार्ड हॉटस्पॉट" : "Ward hotspots"}</h2>
-            <table className="dashboard-ward-table">
-              <thead>
-                <tr>
-                  <th>{hindi ? "वार्ड" : "Ward"}</th>
-                  <th>{hindi ? "कुल" : "Total"}</th>
-                  <th>{hindi ? "लंबित" : "Pending"}</th>
-                  <th>{hindi ? "प्रगति" : "In progress"}</th>
-                  <th>{hindi ? "पूर्ण" : "Completed"}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {summary.wards.map((ward) => (
-                  <tr key={`${ward.ward_id}-${ward.ward_name}`} className={topWards.includes(ward) ? "dashboard-ward-hot" : undefined}>
-                    <th scope="row">
-                      {ward.ward_name}
-                      {ward.ward_id !== ward.ward_name.toLowerCase().replace(/\s+/g, "-") ? ` (${ward.ward_id})` : ""}
-                    </th>
-                    <td>{ward.total}</td>
-                    <td>{ward.pending}</td>
-                    <td>{ward.in_progress}</td>
-                    <td>{ward.completed}</td>
+            <div className="dashboard-section-head">
+              <h2>{hindi ? "वार्ड हॉटस्पॉट" : "Ward hotspots"}</h2>
+              <p>
+                {hindi
+                  ? showAllWards
+                    ? `सभी ${wardTotal} वार्ड`
+                    : `शीर्ष ${Math.min(WARD_PREVIEW_COUNT, wardTotal)} में से ${wardTotal} वार्ड`
+                  : showAllWards
+                    ? `All ${wardTotal} wards`
+                    : `Top ${Math.min(WARD_PREVIEW_COUNT, wardTotal)} of ${wardTotal} wards`}
+              </p>
+            </div>
+            <div className={`dashboard-table-scroll${showAllWards ? " dashboard-table-scroll--expanded" : ""}`}>
+              <table className="dashboard-ward-table">
+                <thead>
+                  <tr>
+                    <th>{hindi ? "वार्ड" : "Ward"}</th>
+                    <th>{hindi ? "कुल" : "Total"}</th>
+                    <th>{hindi ? "लंबित" : "Pending"}</th>
+                    <th>{hindi ? "प्रगति" : "In progress"}</th>
+                    <th>{hindi ? "पूर्ण" : "Completed"}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {visibleWards.map((ward) => (
+                    <tr key={`${ward.ward_id}-${ward.ward_name}`} className={topWards.includes(ward) ? "dashboard-ward-hot" : undefined}>
+                      <th scope="row">
+                        {ward.ward_name}
+                        {ward.ward_id !== ward.ward_name.toLowerCase().replace(/\s+/g, "-") ? ` (${ward.ward_id})` : ""}
+                      </th>
+                      <td>{ward.total}</td>
+                      <td>{ward.pending}</td>
+                      <td>{ward.in_progress}</td>
+                      <td>{ward.completed}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {hasMoreWards && (
+              <p className="dashboard-table-toggle">
+                <button type="button" onClick={() => setShowAllWards((value) => !value)}>
+                  {showAllWards
+                    ? hindi
+                      ? "कम दिखाएँ"
+                      : "Show fewer wards"
+                    : hindi
+                      ? `सभी ${wardTotal} वार्ड दिखाएँ`
+                      : `Show all ${wardTotal} wards`}
+                </button>
+              </p>
+            )}
           </section>
 
           <section className="dashboard-ticket-table-wrap">
             <div className="dashboard-ticket-head">
-              <h2>{hindi ? "हाल की शिकायतें" : "Recent tickets"}</h2>
+              <div className="dashboard-section-head">
+                <h2>{hindi ? "हाल की शिकायतें" : "Recent tickets"}</h2>
+                <p>
+                  {hindi
+                    ? showAllTickets
+                      ? `सभी ${tickets.length} दिख रही हैं`
+                      : `हाल की ${Math.min(TICKET_PREVIEW_COUNT, tickets.length)} शिकायतें`
+                    : showAllTickets
+                      ? `Showing all ${tickets.length}`
+                      : `Latest ${Math.min(TICKET_PREVIEW_COUNT, tickets.length)} reports`}
+                </p>
+              </div>
               <div className="dashboard-filter-chips" role="tablist" aria-label={hindi ? "स्थिति फ़िल्टर" : "Status filters"}>
                 {STATUS_FILTERS.map((item) => (
                   <button
@@ -211,32 +267,47 @@ export function DashboardPage({ hindi, onTrack }: { hindi: boolean; onTrack: () 
                 ))}
               </div>
             </div>
-            <table className="dashboard-ticket-table">
-              <thead>
-                <tr>
-                  <th>{hindi ? "संदर्भ" : "Ref"}</th>
-                  <th>{hindi ? "सेवा" : "Service"}</th>
-                  <th>{hindi ? "वार्ड" : "Ward"}</th>
-                  <th>{hindi ? "विभाग" : "Department"}</th>
-                  <th>{hindi ? "स्थिति" : "Status"}</th>
-                  <th>{hindi ? "दर्ज" : "Reported"}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tickets.map((ticket) => (
-                  <tr key={`${ticket.ref_masked}-${ticket.reported_at}`}>
-                    <td>{ticket.ref_masked}</td>
-                    <td>{ticket.service_label}</td>
-                    <td>{ticket.ward_name}</td>
-                    <td>{ticket.department}</td>
-                    <td>
-                      <span className={statusClass(ticket.status)}>{statusLabel(ticket.status, hindi)}</span>
-                    </td>
-                    <td>{relativeDate(ticket.reported_at, hindi)}</td>
+            <div className={`dashboard-table-scroll${showAllTickets ? " dashboard-table-scroll--expanded" : ""}`}>
+              <table className="dashboard-ticket-table">
+                <thead>
+                  <tr>
+                    <th>{hindi ? "संदर्भ" : "Ref"}</th>
+                    <th>{hindi ? "सेवा" : "Service"}</th>
+                    <th>{hindi ? "वार्ड" : "Ward"}</th>
+                    <th>{hindi ? "विभाग" : "Department"}</th>
+                    <th>{hindi ? "स्थिति" : "Status"}</th>
+                    <th>{hindi ? "दर्ज" : "Reported"}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {visibleTickets.map((ticket) => (
+                    <tr key={`${ticket.ref_masked}-${ticket.reported_at}`}>
+                      <td>{ticket.ref_masked}</td>
+                      <td>{ticket.service_label}</td>
+                      <td>{ticket.ward_name}</td>
+                      <td>{ticket.department}</td>
+                      <td>
+                        <span className={statusClass(ticket.status)}>{statusLabel(ticket.status, hindi)}</span>
+                      </td>
+                      <td>{relativeDate(ticket.reported_at, hindi)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {hasMoreTickets && (
+              <p className="dashboard-table-toggle">
+                <button type="button" onClick={() => setShowAllTickets((value) => !value)}>
+                  {showAllTickets
+                    ? hindi
+                      ? "कम दिखाएँ"
+                      : "Show fewer tickets"
+                    : hindi
+                      ? `सभी ${tickets.length} शिकायतें दिखाएँ`
+                      : `Show all ${tickets.length} tickets`}
+                </button>
+              </p>
+            )}
             <p className="dashboard-track-link">
               <button type="button" className="primary" onClick={onTrack}>
                 {hindi ? "अपना अनुरोध ट्रैक करें" : "Track your own request"}

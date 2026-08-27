@@ -126,6 +126,18 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
 }
 
 .page { max-width: 1160px; margin: 0 auto; padding: 22px 20px 48px; }
+.page--dashboard {
+  max-width: min(1680px, 96vw);
+  padding-inline: clamp(12px, 1.5vw, 24px);
+}
+.page--dashboard .dashboard-map-block {
+  width: 100vw;
+  max-width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+  padding-inline: clamp(12px, 2vw, 32px);
+  box-sizing: border-box;
+}
 .breadcrumb { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
 .page-title {
   display: flex;
@@ -599,14 +611,21 @@ button.primary, .composer button.primary, .location .primary, .review .primary, 
   color: var(--muted);
 }
 .dashboard-hero--outline {
-  background: var(--paper);
+  background: var(--card);
+}
+.dashboard-map-block {
+  position: relative;
+  margin: 0 0 8px;
+  padding: 0;
+  background: transparent;
+  border: 0;
 }
 .dashboard-map-toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   color: var(--muted);
   font-size: 13px;
 }
@@ -619,17 +638,24 @@ button.primary, .composer button.primary, .location .primary, .review .primary, 
   cursor: pointer;
 }
 .dashboard-hero-map {
-  height: min(440px, 58vh);
   width: 100%;
-  border: 1px solid var(--line);
+  aspect-ratio: 16 / 9;
+  height: auto;
+  max-height: min(72vh, 820px);
+  min-height: 360px;
+  border: 0;
   z-index: 1;
-  background: var(--paper);
+  background: transparent;
 }
 .dashboard-hero-map .leaflet-container {
   height: 100%;
   width: 100%;
   font: inherit;
-  background: var(--paper);
+  background: transparent;
+}
+.dashboard-hero-map .leaflet-control-zoom-out.leaflet-disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 .dashboard-hero-map .leaflet-pane,
 .dashboard-hero-map .leaflet-layer,
@@ -667,16 +693,18 @@ button.primary, .composer button.primary, .location .primary, .review .primary, 
 .dashboard-stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: 14px;
+  margin-top: 48px;
+  margin-bottom: 20px;
 }
 .dashboard-stat-card {
   background: var(--card);
   border: 1px solid var(--line);
-  padding: 14px 16px;
+  padding: 18px 20px;
+  min-height: 96px;
 }
-.dashboard-stat-card span { display: block; color: var(--muted); font-size: 13px; margin-bottom: 6px; }
-.dashboard-stat-card strong { font-size: 28px; color: var(--navy); }
+.dashboard-stat-card span { display: block; color: var(--muted); font-size: 13px; margin-bottom: 8px; }
+.dashboard-stat-card strong { font-size: clamp(28px, 3vw, 36px); color: var(--navy); line-height: 1.1; }
 .dashboard-updated { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: 13px; }
 .dashboard-dept-grid, .dashboard-ward-table-wrap, .dashboard-ticket-table-wrap {
   background: var(--card);
@@ -685,9 +713,52 @@ button.primary, .composer button.primary, .location .primary, .review .primary, 
   margin-bottom: 16px;
 }
 .dashboard-dept-grid h2, .dashboard-ward-table-wrap h2, .dashboard-ticket-head h2 {
-  margin: 0 0 12px;
+  margin: 0;
   color: var(--navy);
   font-size: 18px;
+}
+.dashboard-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 16px;
+  margin-bottom: 12px;
+}
+.dashboard-section-head p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.dashboard-table-scroll {
+  overflow: hidden;
+}
+.dashboard-table-scroll--expanded {
+  max-height: min(420px, 50vh);
+  overflow: auto;
+  border: 1px solid var(--line);
+}
+.dashboard-table-scroll--expanded .dashboard-ward-table,
+.dashboard-table-scroll--expanded .dashboard-ticket-table {
+  margin: 0;
+}
+.dashboard-table-scroll--expanded thead th {
+  position: sticky;
+  top: 0;
+  background: #f7fbff;
+  z-index: 1;
+}
+.dashboard-table-toggle {
+  margin: 10px 0 0;
+}
+.dashboard-table-toggle button {
+  border: 1px solid #afbbc5;
+  background: #fff;
+  color: var(--navy);
+  padding: 8px 14px;
+  border-radius: 2px;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
 }
 .dashboard-dept-cards {
   display: grid;
@@ -723,10 +794,13 @@ button.primary, .composer button.primary, .location .primary, .review .primary, 
 .dashboard-ticket-head {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
   flex-wrap: wrap;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
+}
+.dashboard-ticket-head .dashboard-section-head {
+  margin-bottom: 0;
 }
 .dashboard-filter-chips { display: flex; gap: 8px; flex-wrap: wrap; }
 .dashboard-filter-chips button {
