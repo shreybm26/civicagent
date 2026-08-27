@@ -49,15 +49,15 @@ export function StreamingAgentText({
         return;
       }
       const just = tokens[index - 1] ?? "";
-      // Deliberately slow: ~38ms/char, longer pauses on punctuation and spaces after sentences.
-      let pause = 38;
-      if (/[.!?…]/.test(just)) pause = 420;
-      else if (/[,;:]/.test(just)) pause = 220;
-      else if (just === " " && /[.!?…]/.test(tokens[index - 2] ?? "")) pause = 160;
-      else if (just === " ") pause = 52;
+      // Slightly paced character reveal with short punctuation breaths.
+      let pause = 28;
+      if (/[.!?…]/.test(just)) pause = 300;
+      else if (/[,;:]/.test(just)) pause = 150;
+      else if (just === " " && /[.!?…]/.test(tokens[index - 2] ?? "")) pause = 100;
+      else if (just === " ") pause = 38;
       timer = window.setTimeout(tick, pause);
     };
-    timer = window.setTimeout(tick, 48);
+    timer = window.setTimeout(tick, 36);
 
     return () => {
       cancelled = true;
