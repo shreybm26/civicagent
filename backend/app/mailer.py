@@ -100,6 +100,8 @@ def send_acknowledgement(
     to_email = normalize_email(to_email)
     text, html_body = build_acknowledgement_bodies(view=view, access_key=access_key, track_url=track_url)
     subject = f"Demo acknowledgement {view.sr_id}"
+    smtp_password = "".join(smtp_password.split())
+    smtp_username = smtp_username.strip()
     if smtp_configured(smtp_username, smtp_password):
         _send_via_smtp(
             host=smtp_host or "smtp.gmail.com",

@@ -255,6 +255,7 @@ class _FakeSMTP:
         self.host = host
         self.port = port
         self.login_user = None
+        self.login_password = None
         self.sent = None
 
     def __enter__(self):
@@ -268,6 +269,7 @@ class _FakeSMTP:
 
     def login(self, username, password):
         self.login_user = username
+        self.login_password = password
 
     def sendmail(self, from_addr, to_addrs, msg):
         self.sent = (from_addr, list(to_addrs), msg)
@@ -280,7 +282,7 @@ def test_track_email_sends_via_smtp_to_any_inbox(tmp_path: Path) -> None:
                 tmp_path,
                 resend_api_key="re_should_not_be_used",
                 smtp_username="civicagent.demo@gmail.com",
-                smtp_password="app-password",
+                smtp_password="app- pass word",
                 smtp_from="CivicAgent Demo <civicagent.demo@gmail.com>",
             )
         )
@@ -310,6 +312,7 @@ def test_track_email_sends_via_smtp_to_any_inbox(tmp_path: Path) -> None:
     server = created[0]
     assert server.host == "smtp.gmail.com"
     assert server.login_user == "civicagent.demo@gmail.com"
+    assert server.login_password == "app-password"
     assert server.sent is not None
     from_addr, to_addrs, raw = server.sent
     assert from_addr == "civicagent.demo@gmail.com"

@@ -80,7 +80,7 @@ class Settings:
     smtp_host: str = os.getenv("SMTP_HOST", "smtp.gmail.com").strip() or "smtp.gmail.com"
     smtp_port: int = _int_env("SMTP_PORT", 587)
     smtp_username: str = os.getenv("SMTP_USERNAME", "").strip()
-    smtp_password: str = os.getenv("SMTP_PASSWORD", "").strip()
+    smtp_password: str = "".join(os.getenv("SMTP_PASSWORD", "").split())
     smtp_from: str = os.getenv("SMTP_FROM", "").strip()
     public_base_url: str = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
     image_confidence_threshold: float = _float_env("IMAGE_CONFIDENCE_THRESHOLD", 0.7)
