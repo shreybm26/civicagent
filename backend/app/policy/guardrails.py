@@ -46,10 +46,10 @@ def safe_citizen_message(text: str) -> str:
     """Return a user-facing boundary message for unsafe/unsupported requests."""
 
     if is_prompt_injection(text):
-        return "I can collect and submit a civic report only after the required review and your explicit confirmation."
+        return "I can only submit after you review the summary and confirm."
     if is_unsupported_policy_request(text):
-        return "I can help collect a civic issue report, but I cannot provide legal, eligibility, or guaranteed-response advice."
-    return "I can help collect a civic issue report using the supported service types."
+        return "I can't give legal or response-time advice, but I can lodge your report."
+    return "I can help with road, garbage, streetlight, water, or sanitation complaints."
 
 
 def validate_schema_authority(schema: ServiceSchema, known_departments: Iterable[str] | None = None) -> None:

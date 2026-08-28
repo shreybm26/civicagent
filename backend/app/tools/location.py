@@ -205,7 +205,7 @@ def _geocode_hits_to_result(query: str, hits: GeocodeHits) -> LocationResult:
         return LocationResult(
             query=query,
             needs_clarification=True,
-            message="I could not find that place yet. Try an area and city, or drop a pin on the map.",
+            message="Couldn't find that. Try a landmark and city, or pin it on the map.",
         )
 
     # Several OSM rows for one locality is normal (ward, suburb, bus stop).
@@ -218,7 +218,7 @@ def _geocode_hits_to_result(query: str, hits: GeocodeHits) -> LocationResult:
         lng=lng,
         confidence=0.86,
         source="geocoded",
-        message=f"I found this location: {address}. Is that correct?",
+        message=f"Is this the spot — {address}?",
     )
 
 
@@ -235,7 +235,7 @@ def _curated_match(query: str) -> LocationResult | None:
         return LocationResult(
             query=query,
             needs_clarification=True,
-            message=f"I found more than one possible location ({names}). Which one is correct?",
+            message=f"A few matches came up ({names}). Which one?",
         )
     if len(unique) == 1:
         location = next(iter(unique.values()))
@@ -259,11 +259,11 @@ def resolve_location(
 ) -> LocationResult:
     raw = text.strip()
     if not raw:
-        return LocationResult(query="unknown", needs_clarification=True, message="Please tell me a nearby landmark or area.")
+        return LocationResult(query="unknown", needs_clarification=True, message="Share a nearby landmark or area.")
 
     cleaned = strip_location_filler(raw)
     if _normalize(raw) in VAGUE_QUERIES or _normalize(cleaned) in VAGUE_QUERIES:
-        return LocationResult(query=raw, needs_clarification=True, message="Please provide a recognizable landmark, area, or street.")
+        return LocationResult(query=raw, needs_clarification=True, message="Please share a landmark, area, or street.")
 
     for candidate in (cleaned, raw):
         curated = _curated_match(candidate)
@@ -280,5 +280,5 @@ def resolve_location(
     return last or LocationResult(
         query=cleaned or raw,
         needs_clarification=True,
-        message="I could not find that place yet. Try an area and city, or drop a pin on the map.",
+        message="Couldn't find that. Try a landmark and city, or pin it on the map.",
     )

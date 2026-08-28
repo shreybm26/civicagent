@@ -117,7 +117,7 @@ def build_api_router(
     def media_decision(session_id: UUID, body: MediaDecisionIn) -> SessionView:
         state = _get_state(store, session_id)
         state.image_decision = "added" if body.has_image else "skipped"
-        message = "Please attach a photo of the issue when you are ready." if body.has_image else "No image added. Please complete the remaining details."
+        message = "Upload a photo when you're ready." if body.has_image else "No photo — that's fine. A few details still needed."
         _append_agent_turn(state, message)
         saved = store.save(state)
         return graph.view(saved, message=message)

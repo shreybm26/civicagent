@@ -8,22 +8,19 @@ const MAP_CENTER: [number, number] = [17.385, 78.4867];
 
 export function LocationConfirmation({
   onConfirm,
-  onResolveText,
   busy,
   hindi,
 }: {
   onConfirm: (pick: Pick) => void;
-  onResolveText: (text: string) => void;
+  onResolveText?: (text: string) => void;
   busy?: boolean;
   hindi?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
-  // Open only after the citizen taps Location — never auto-expand the map.
   const [open, setOpen] = useState(false);
   const [pick, setPick] = useState<Pick | null>(null);
-  const [text, setText] = useState("");
   const [locating, setLocating] = useState(false);
 
   async function update(next: { lat: number; lng: number }) {
@@ -108,8 +105,13 @@ export function LocationConfirmation({
   if (!open) {
     return (
       <div className="chat-step location-step location-collapsed">
+        <p className="location-hint">
+          {hindi
+            ? "नीचे स्थान या स्थलचिह्न लिखें, या मानचित्र से चुनें।"
+            : "Type your location in the box below, or pick it on the map."}
+        </p>
         <button type="button" className="primary location-open" disabled={busy} onClick={() => setOpen(true)}>
-          {hindi ? "स्थान" : "Location"}
+          {hindi ? "मानचित्र से चुनें" : "Pick on map"}
         </button>
       </div>
     );
@@ -118,7 +120,7 @@ export function LocationConfirmation({
   return (
     <div className="chat-step location-step" aria-labelledby="location-step-title">
       <div className="step-actions location-toolbar">
-        <h3 id="location-step-title">{hindi ? "स्थान चुनें" : "Select the issue location"}</h3>
+        <h3 id="location-step-title">{hindi ? "मानचित्र से स्थान चुनें" : "Pick location on map"}</h3>
         <button type="button" onClick={() => setOpen(false)} disabled={busy}>
           {hindi ? "बंद करें" : "Close"}
         </button>
@@ -147,25 +149,6 @@ export function LocationConfirmation({
         >
           {hindi ? "स्थान की पुष्टि करें" : "Confirm location"}
         </button>
-      </div>
-      <div className="location-fallback">
-        <label htmlFor="landmark">{hindi ? "या स्थलचिह्न लिखें" : "Or type a landmark or area"}</label>
-        <div>
-          <input
-            id="landmark"
-            value={text}
-            onChange={(event) => setText(event.target.value)}
-            placeholder={hindi ? "स्थलचिह्न या क्षेत्र" : "Landmark or area"}
-            disabled={busy}
-          />
-          <button
-            type="button"
-            onClick={() => text.trim() && onResolveText(text.trim())}
-            disabled={busy || !text.trim()}
-          >
-            {hindi ? "स्थलचिह्न उपयोग करें" : "Use landmark"}
-          </button>
-        </div>
       </div>
     </div>
   );

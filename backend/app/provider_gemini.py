@@ -133,7 +133,7 @@ class GeminiBackedRouter:
                     service_id=service_id,  # type: ignore[arg-type]
                     confidence=confidence,
                     needs_clarification=False,
-                    message=f"I identified this as a {schemas[service_id].service_name.lower()}.",
+                    message=f"Got it — a {schemas[service_id].service_name.lower()} issue.",
                 )
         except Exception:
             logger.info("gemini_fallback", extra={"civic_event": {"event": "classify_fallback"}})

@@ -1,5 +1,5 @@
 import { FormEvent, useState } from "react";
-import type { TrackingView } from "../../lib/types";
+import type { TimelineStep, TrackingView } from "../../lib/types";
 import { CivicApiError, api } from "../../lib/api";
 import { fieldLabel } from "../../lib/fieldLabels";
 import { CredentialRow } from "../receipt/CredentialRow";
@@ -117,7 +117,7 @@ function TrackingResult({
       <dl>
         <dt>{hindi ? "वर्तमान स्थिति" : "Current status"}</dt>
         <dd>
-          <span className={statusClass(record.status_key || record.status)}>{record.status}</span>
+          <span className={statusClass(record.status_key, record.status)}>{trackingStatusLabel(record, hindi)}</span>
         </dd>
         <dt>{hindi ? "विभाग" : "Department"}</dt>
         <dd>{record.department || (hindi ? "नागरिक सेवाएँ" : "Civic services")}</dd>
@@ -132,8 +132,8 @@ function TrackingResult({
       </dl>
       {timeline.length > 0 && (
         <ol className="track-timeline">
-          {timeline.map((step) => (
-            <li key={step.id} className={step.done ? "done" : "pending"}>
+          {timeline.map((step, index) => (
+            <li key={step.id} className={timelineStepClass(step, index, timeline)}>
               <strong>{timelineTitle(step.id, step.title, hindi)}</strong>
               <span>{timelineDetail(step.id, step.detail, hindi)}</span>
               {step.at && <em>{new Date(step.at).toLocaleString("en-IN")}</em>}
@@ -211,11 +211,24 @@ function TrackingResult({
   );
 }
 
-function statusClass(status: string): string {
-  const normalized = status.toLowerCase().replace(/\s+/g, "_");
+function timelineStepClass(step: TimelineStep, index: number, timeline: TimelineStep[]): string {
+  if (!step.done) return "upcoming";
+  const lastDoneIndex = timeline.reduce((latest, item, itemIndex) => (item.done ? itemIndex : latest), -1);
+  return index === lastDoneIndex ? "done current" : "done";
+}
+
+function trackingStatusLabel(record: TrackingView, hindi: boolean): string {
+  if (record.status_key === "pending") {
+    return hindi ? "प्राप्त — डेमो प्रकोष्ठ में दर्ज" : "Received — logged with demo cell";
+  }
+  return record.status;
+}
+
+function statusClass(statusKey?: string, status?: string): string {
+  const normalized = (statusKey || status || "pending").toLowerCase().replace(/\s+/g, "_");
   if (normalized === "in_progress") return "status-badge status-badge--in_progress";
   if (normalized === "completed") return "status-badge status-badge--completed";
-  return "status-badge status-badge--pending";
+  return "status-badge status-badge--received";
 }
 
 function timelineTitle(id: string, fallback: string, hindi: boolean): string {

@@ -336,14 +336,36 @@ export default function App() {
               <div className="workspace-chat">
                 <ChatPanel
                   messages={messages}
-                  onSend={send}
+                  onSend={
+                    showLocation
+                      ? (text) =>
+                          run(
+                            () => api.resolveLocation(session.session_id, text),
+                            "Location could not be verified. Please type a landmark or area.",
+                            "resolving_location",
+                          )
+                      : send
+                  }
                   busy={busy}
                   hindi={hindi}
                   showSuggestions={session.state === "IDLE"}
+                  composerLabel={
+                    showLocation ? (hindi ? "स्थान / स्थलचिह्न" : "Location or landmark") : undefined
+                  }
+                  composerPlaceholder={
+                    showLocation
+                      ? hindi
+                        ? "उदाहरण: JNTU मेट्रो के पास, Kukatpally"
+                        : "Example: Near JNTU Metro, Kukatpally"
+                      : undefined
+                  }
+                  composerSubmitLabel={showLocation ? (hindi ? "स्थान भेजें" : "Send location") : undefined}
                   contextualStep={
                     session.state === "COMPLETED" && session.receipt ? (
                       <ReceiptPanel
                         receipt={session.receipt}
+                        serviceName={session.service?.name}
+                        fields={session.fields}
                         onReset={() => run(() => api.reset(session.session_id), "Reset failed.", "resetting")}
                         onTrack={() => go("/track")}
                         hindi={hindi}

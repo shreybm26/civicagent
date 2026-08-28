@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
+from ..copy.empathy import empathetic_location_prompt
 from ..contracts import (
     CivicError,
     Evidence,
@@ -146,7 +147,7 @@ class WorkflowGraph:
         next_state.validation = self._validate(next_state, self.schemas[next_state.service_id])
         return WorkflowResult(
             state=next_state,
-            message=f"Location selected: {result.address}. Do you have a photo of this issue?",
+            message=f"Got it — {result.address}. Have a photo? You can skip.",
             event="location_resolved",
             changed_fields=("location",),
             metadata={"redacted_event": redacted_event(next_state, "location_resolved")},
@@ -264,12 +265,12 @@ class WorkflowGraph:
             why = (result.reason or "It does not show the reported civic issue clearly.").strip()
             message = (
                 f"That photo does not look relevant to this {schema.service_name}. {why} "
-                "Please upload a correct photo of the issue, or choose No image to continue without one."
+                "Upload a clearer photo, or choose No image to continue without one."
             )
         elif result_state.state == "REVIEWING":
-            message = f"{result.reason} Please review the completed details below."
+            message = f"{result.reason} Please check the summary and confirm when ready."
         else:
-            message = f"{result.reason} Please complete the remaining details."
+            message = f"{result.reason} A few details still needed."
         return WorkflowResult(
             state=result_state,
             message=message,
@@ -302,7 +303,7 @@ class WorkflowGraph:
         result_state, message = self._finish_collection(next_state)
         return WorkflowResult(
             state=result_state,
-            message=f"Updated {field_id}. {message}",
+            message=f"Updated. {message}",
             event="citizen_edits",
             changed_fields=(field_id,),
             metadata={"redacted_event": redacted_event(result_state, "citizen_edits")},
@@ -353,8 +354,8 @@ class WorkflowGraph:
         return WorkflowResult(
             state=next_state,
             message=(
-                f"Complaint submitted successfully. Service request {receipt.reference}. "
-                "Save the access key on the acknowledgement to track this request."
+                f"Registered. Reference {receipt.reference}. "
+                "Save your access key on the acknowledgement to track it."
             ),
             event="receipt",
             metadata={"reference": receipt.reference, "redacted_event": redacted_event(next_state, "receipt")},
@@ -368,7 +369,7 @@ class WorkflowGraph:
             state.error = None
             return WorkflowResult(
                 state=state,
-                message="I can currently help with road, garbage, streetlight, water, or sanitation issues. Which issue would you like to report?",
+                message="I can take road, garbage, streetlight, water, or sanitation complaints. Which one is this?",
                 event="unrecognized_intent",
                 metadata={"redacted_event": redacted_event(state, "unrecognized_intent")},
             )
@@ -392,7 +393,7 @@ class WorkflowGraph:
         )
         return WorkflowResult(
             state=state,
-            message=f"I can help report this {schema.service_name.lower()}. Where exactly is the issue?",
+            message=empathetic_location_prompt(service_id, text),
             event="service_identified",
             changed_fields=("description",),
             metadata={"service_id": service_id, "redacted_event": redacted_event(state, "service_identified")},
@@ -446,7 +447,7 @@ class WorkflowGraph:
             state.state = transition(state.state, "location_resolved")
             return WorkflowResult(
                 state=state,
-                message=f"Location selected: {result.address}. Do you have a photo of this issue?",
+                message=f"Got it — {result.address}. Have a photo? You can skip.",
                 event="location_resolved",
                 changed_fields=("location",),
                 metadata={"redacted_event": redacted_event(state, "location_resolved")},
@@ -456,7 +457,7 @@ class WorkflowGraph:
         state.location = Location(query=result.query)
         return WorkflowResult(
             state=state,
-            message=result.message or "Please provide a nearby landmark or area.",
+            message=result.message or "Couldn't find that yet. Share a nearby landmark or area.",
             event="location_failed",
             metadata={"redacted_event": redacted_event(state, "location_failed")},
         )
@@ -470,11 +471,11 @@ class WorkflowGraph:
             state.state = "COLLECTING"
             missing = state.validation.missing_fields
             field = schema.field(missing[0]) if missing else None
-            return state, self._question_for(field) if field else "I still need one more detail."
+            return state, self._question_for(field) if field else "One more detail, please."
         if state.state == "COLLECTING":
             state.state = transition(state.state, "all_required_present")
         state.state = transition(state.state, "validation_passed")
-        return state, "Please review the details below and confirm submission."
+        return state, "Please check the summary on the right and confirm when ready."
 
     def _validate(self, state: SessionState, schema: ServiceSchema) -> ValidationResult:
         fields = {field.id: field for field in state.fields}
@@ -490,18 +491,18 @@ class WorkflowGraph:
 
     def _question_for(self, field: Any | None) -> str:
         if field is None:
-            return "Please provide the missing detail."
+            return "One more detail, please."
         labels = {
-            "location": "Where exactly is the issue?",
-            "description": "Please describe the issue.",
-            "severity": "How severe is the issue: low, medium, or high?",
-            "duration": "How long has this been happening?",
-            "leak_type": "What kind of leak is it: pipe, tap, supply, or unknown?",
-            "issue_type": "What kind of sanitation issue is it: sewage, drain, public hygiene, or other?",
-            "pole_number": "Do you know the streetlight pole number? You can say I don't know.",
-            "time_noticed": "When did you first notice the issue?",
+            "location": "Where is it happening?",
+            "description": "What happened?",
+            "severity": "How bad is it — low, medium, or high?",
+            "duration": "How long has this been going on?",
+            "leak_type": "Pipe, tap, supply, or unsure?",
+            "issue_type": "Sewage, drain, hygiene, or other?",
+            "pole_number": "Know the pole number? Say don't know if not.",
+            "time_noticed": "When did you first notice it?",
         }
-        return labels.get(field.id, f"Please provide the {field.id.replace('_', ' ')}.")
+        return labels.get(field.id, "One more detail, please.")
 
     def _missing_required(self, state: SessionState, schema: ServiceSchema) -> list[Any]:
         fields = {field.id: field for field in state.fields}

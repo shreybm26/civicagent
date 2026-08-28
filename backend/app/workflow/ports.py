@@ -44,7 +44,7 @@ class MockRouter:
                 service_id=None,
                 confidence=0.0,
                 needs_clarification=True,
-                message="I can currently help with road, garbage, streetlight, water, or sanitation issues. Which issue would you like to report?",
+                message="I can take road, garbage, streetlight, water, or sanitation complaints. Which one is this?",
             )
         confidence = min(0.95, 0.6 + (0.1 * best))
         service_id = winners[0]
@@ -52,7 +52,7 @@ class MockRouter:
             service_id=service_id,
             confidence=confidence,
             needs_clarification=confidence < 0.7,
-            message=f"I identified this as a {schemas[service_id].service_name.lower()}.",
+            message=f"Got it — a {schemas[service_id].service_name.lower()} issue.",
         )
 
 

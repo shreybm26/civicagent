@@ -37,7 +37,7 @@ class ConversationProvider:
             service_id=None,
             confidence=0.0,
             needs_clarification=True,
-            message="I need a little more detail about the civic issue you want to report.",
+            message="Could you share a bit more about the issue?",
         )
 
     def collect(self, message: str) -> list[Candidate]:

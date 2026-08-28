@@ -16,6 +16,9 @@ type Props = {
   /** Stable id for the current step so the widget stays mounted across busy/stream. */
   contextualKey?: string;
   composerEnabled?: boolean;
+  composerLabel?: string;
+  composerPlaceholder?: string;
+  composerSubmitLabel?: string;
   mediaUrl: (mediaId: string) => string;
   pendingAction?: PendingAction;
   avatarState?: AvatarState;
@@ -34,6 +37,9 @@ export function ChatPanel({
   contextualStep,
   contextualKey = "",
   composerEnabled = true,
+  composerLabel,
+  composerPlaceholder,
+  composerSubmitLabel,
   mediaUrl,
   pendingAction = null,
   avatarState = "idle",
@@ -244,7 +250,9 @@ export function ChatPanel({
 
       {composerEnabled && (
         <form onSubmit={submit} className="composer">
-          <label htmlFor="message">{hindi ? "शिकायत लिखें" : "Describe the issue"}</label>
+          <label htmlFor="message">
+            {composerLabel ?? (hindi ? "शिकायत लिखें" : "Describe the issue")}
+          </label>
           <div>
             <input
               id="message"
@@ -253,11 +261,12 @@ export function ChatPanel({
               disabled={busy}
               maxLength={4000}
               placeholder={
-                hindi ? "उदाहरण: सड़क पर गड्ढा है" : "Example: There is a pothole on my street"
+                composerPlaceholder ??
+                (hindi ? "उदाहरण: सड़क पर गड्ढा है" : "Example: There is a pothole on my street")
               }
             />
             <button type="submit" className="primary" disabled={busy || !value.trim()}>
-              {hindi ? "भेजें" : "Send"}
+              {composerSubmitLabel ?? (hindi ? "भेजें" : "Send")}
             </button>
           </div>
         </form>
