@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api, isExpiredSession, mediaUrl } from "./lib/api";
+import { notifyDashboardUpdated } from "./lib/dashboardRefresh";
 import { conversation, STATE_LABEL } from "./lib/conversation";
 import { activityLabel, type AvatarState, type PendingAction } from "./lib/activity";
 import type { SessionView } from "./lib/types";
@@ -86,7 +87,11 @@ export default function App() {
     setAvatarState("processing");
     setError("");
     try {
-      setSession(await task());
+      const next = await task();
+      setSession(next);
+      if (next.state === "COMPLETED" && next.receipt) {
+        notifyDashboardUpdated();
+      }
       setAvatarState("success");
       if (successTimerRef.current) window.clearTimeout(successTimerRef.current);
       successTimerRef.current = window.setTimeout(() => setAvatarState("idle"), 1200);
@@ -300,7 +305,7 @@ export default function App() {
         {onTrackPage ? (
           <TrackPage hindi={hindi} initialSrId={session?.receipt?.reference || ""} />
         ) : onDashboardPage ? (
-          <DashboardPage hindi={hindi} onTrack={() => go("/track")} />
+          <DashboardPage hindi={hindi} isActive={onDashboardPage} onTrack={() => go("/track")} />
         ) : session ? (
           <>
             <p className="breadcrumb">

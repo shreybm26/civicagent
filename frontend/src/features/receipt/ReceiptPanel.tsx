@@ -1,4 +1,5 @@
 import type { Field, Receipt } from "../../lib/types";
+import { downloadReceiptPdf } from "../../lib/receiptPdf";
 import { CredentialRow } from "./CredentialRow";
 import { EmailAckForm } from "./EmailAckForm";
 
@@ -16,7 +17,18 @@ export function ReceiptPanel({
   onReset: () => void;
   onTrack: () => void;
   hindi: boolean;
-}) {  return (
+}) {
+  function handleDownloadPdf() {
+    try {
+      downloadReceiptPdf({ receipt, serviceName, fields });
+    } catch {
+      window.alert(
+        hindi ? "PDF डाउनलोड नहीं हो सका। कृपया पुनः प्रयास करें।" : "PDF download failed. Please try again.",
+      );
+    }
+  }
+
+  return (
     <section className="receipt">
       <div className="ack-banner">{hindi ? "पावती" : "Acknowledgement"}</div>
       <h2>{hindi ? "शिकायत दर्ज हो गई है" : "Grievance registered"}</h2>
@@ -54,15 +66,7 @@ export function ReceiptPanel({
           : "Demo receipt only. This application was not sent to a live government department. Use the access key above to track this request."}
       </p>
       <div className="receipt-actions">
-        <button
-          type="button"
-          className="primary"
-          onClick={() => {
-            void import("../../lib/receiptPdf").then(({ downloadReceiptPdf }) =>
-              downloadReceiptPdf({ receipt, serviceName, fields }),
-            );
-          }}
-        >
+        <button type="button" className="primary" onClick={handleDownloadPdf}>
           {hindi ? "PDF डाउनलोड" : "Download PDF"}
         </button>
         <button type="button" className="primary" onClick={onTrack}>

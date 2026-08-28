@@ -256,15 +256,13 @@ export function GhmcChoropleth({
   return (
     <section className="dashboard-map-block" aria-label={hindi ? "हैदराबाद वार्ड नक्शा" : "Hyderabad ward map"}>
       <div className="dashboard-map-toolbar">
-        <span>
-          {selectedWardId
-            ? hindi
-              ? "वार्ड चयनित — शिकायतें फ़िल्टर हो रही हैं"
-              : "Ward selected — recent tickets are filtered"
-            : hindi
-              ? "वार्ड पर क्लिक करें या नीचे खोजें"
-              : "Click a ward or search below to filter tickets"}
-        </span>
+        {selectedWardId ? (
+          <span>
+            {hindi ? "वार्ड चयनित — शिकायतें फ़िल्टर हो रही हैं" : "Ward selected — tickets filtered"}
+          </span>
+        ) : (
+          <span>{hindi ? "वार्ड नक्शा" : "Ward map"}</span>
+        )}
         <button type="button" onClick={resetView}>
           {hindi ? "रीसेट" : "Reset view"}
         </button>

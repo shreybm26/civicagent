@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { CivicApiError, api } from "../../lib/api";
+import { subscribeDashboardUpdated } from "../../lib/dashboardRefresh";
 import type { DashboardSummary, PublicTicketRow, ServiceId, TicketStatus } from "../../lib/types";
 import { GhmcChoropleth, type WardGeoJson } from "../../components/charts/GhmcChoropleth";
 
@@ -62,7 +63,15 @@ function wardsFromMap(wardMap: WardGeoJson | null): WardOption[] {
   return rows.sort((left, right) => left.wardName.localeCompare(right.wardName));
 }
 
-export function DashboardPage({ hindi, onTrack }: { hindi: boolean; onTrack: () => void }) {
+export function DashboardPage({
+  hindi,
+  onTrack,
+  isActive = true,
+}: {
+  hindi: boolean;
+  onTrack: () => void;
+  isActive?: boolean;
+}) {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [tickets, setTickets] = useState<PublicTicketRow[]>([]);
   const [wardMap, setWardMap] = useState<WardGeoJson | null>(null);
@@ -74,47 +83,53 @@ export function DashboardPage({ hindi, onTrack }: { hindi: boolean; onTrack: () 
   const [showAllTickets, setShowAllTickets] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(true);
+  const [refreshTick, setRefreshTick] = useState(0);
 
-  useEffect(() => {
-    let active = true;
+  const loadDashboard = useCallback(async () => {
     setBusy(true);
     setError("");
-    Promise.all([api.dashboardSummary(), api.dashboardTickets({ limit: 50 }), api.dashboardWardMap()])
-      .then(([nextSummary, nextTickets, nextMap]) => {
-        if (!active) return;
-        setSummary(nextSummary);
-        setTickets(nextTickets);
-        setWardMap(nextMap as WardGeoJson);
-      })
-      .catch((caught) => {
-        if (!active) return;
-        setError(
-          caught instanceof CivicApiError
-            ? caught.message
-            : hindi
-              ? "डैशबोर्ड लोड नहीं हो सका।"
-              : "The dashboard could not be loaded.",
-        );
-      })
-      .finally(() => {
-        if (active) setBusy(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [hindi]);
+    try {
+      const [nextSummary, nextTickets, nextMap] = await Promise.all([
+        api.dashboardSummary(),
+        api.dashboardTickets({
+          status: statusFilter === "all" ? undefined : statusFilter,
+          serviceId: serviceFilter === "all" ? undefined : serviceFilter,
+          wardId: selectedWard?.wardId,
+          limit: 50,
+        }),
+        api.dashboardWardMap(),
+      ]);
+      setSummary(nextSummary);
+      setTickets(nextTickets);
+      setWardMap(nextMap as WardGeoJson);
+    } catch (caught) {
+      setError(
+        caught instanceof CivicApiError
+          ? caught.message
+          : hindi
+            ? "डैशबोर्ड लोड नहीं हो सका।"
+            : "The dashboard could not be loaded.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }, [hindi, selectedWard?.wardId, serviceFilter, statusFilter]);
+
+  useEffect(() => subscribeDashboardUpdated(() => setRefreshTick((tick) => tick + 1)), []);
 
   useEffect(() => {
-    api
-      .dashboardTickets({
-        status: statusFilter === "all" ? undefined : statusFilter,
-        serviceId: serviceFilter === "all" ? undefined : serviceFilter,
-        wardId: selectedWard?.wardId,
-        limit: 50,
-      })
-      .then(setTickets)
-      .catch(() => undefined);
-  }, [statusFilter, serviceFilter, selectedWard]);
+    if (!isActive) return;
+    void loadDashboard();
+  }, [isActive, loadDashboard, refreshTick]);
+
+  useEffect(() => {
+    if (!isActive) return;
+    function onFocus() {
+      void loadDashboard();
+    }
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [isActive, loadDashboard]);
 
   useEffect(() => {
     setShowAllTickets(false);
@@ -175,21 +190,9 @@ export function DashboardPage({ hindi, onTrack }: { hindi: boolean; onTrack: () 
         {hindi ? "मुख्य पृष्ठ" : "Home"} / {hindi ? "नागरिक सेवाएँ" : "Citizen services"} /{" "}
         <strong>{hindi ? "शहर डैशबोर्ड" : "City dashboard"}</strong>
       </p>
-      <header className="page-title">
-        <div>
-          <h1>{hindi ? "खुला नागरिक ट्रैकिंग बोर्ड" : "Open civic tracking board"}</h1>
-          <p>
-            {hindi
-              ? "इस प्रोटोटाइप में दर्ज हर शिकायत यहाँ दिखती है ताकि वार्ड हॉटस्पॉट और विभागीय प्रतिक्रिया दिख सके। यह लाइव GHMC सिस्टम नहीं है।"
-              : "Every reported issue in this prototype is listed here so citizens can see ward hotspots and department response. This is not a live GHMC system — it shows how transparency creates accountability."}
-          </p>
-        </div>
+      <header className="page-title page-title--dashboard">
+        <h1>{hindi ? "शहर डैशबोर्ड" : "City dashboard"}</h1>
       </header>
-      <p className="notice-banner dashboard-banner" role="note">
-        {hindi
-          ? "प्रदर्शन डेटा — OSM-आधारित ~150 GHMC वार्ड सीमाएँ। कोई लाइव GHMC इनबॉक्स जुड़ा नहीं है।"
-          : "Demonstration data — OSM-derived ~150 GHMC ward boundaries. No live GHMC inbox is connected."}
-      </p>
       {error && (
         <p className="error" role="alert">
           {error}
@@ -199,25 +202,6 @@ export function DashboardPage({ hindi, onTrack }: { hindi: boolean; onTrack: () 
         <p className="dashboard-loading">{hindi ? "डैशबोर्ड लोड हो रहा है…" : "Loading dashboard…"}</p>
       ) : summary ? (
         <>
-          <GhmcChoropleth
-            data={wardMap}
-            hindi={hindi}
-            selectedWardId={selectedWard?.wardId ?? null}
-            onWardSelect={(ward) => selectWard(ward)}
-          />
-          {selectedWard && (
-            <p className="dashboard-active-filter">
-              <span>
-                {hindi ? "वार्ड फ़िल्टर:" : "Ward filter:"}{" "}
-                <strong>
-                  {selectedWard.wardName} ({selectedWard.wardId})
-                </strong>
-              </span>
-              <button type="button" onClick={() => selectWard(null)}>
-                {hindi ? "हटाएँ" : "Clear"}
-              </button>
-            </p>
-          )}
           <section className="dashboard-stats" aria-label={hindi ? "सारांश" : "Summary"}>
             <article className="dashboard-stat-card">
               <span>{hindi ? "कुल मुद्दे" : "Total issues"}</span>
@@ -268,6 +252,26 @@ export function DashboardPage({ hindi, onTrack }: { hindi: boolean; onTrack: () 
               ))}
             </div>
           </section>
+
+          <GhmcChoropleth
+            data={wardMap}
+            hindi={hindi}
+            selectedWardId={selectedWard?.wardId ?? null}
+            onWardSelect={(ward) => selectWard(ward)}
+          />
+          {selectedWard && (
+            <p className="dashboard-active-filter">
+              <span>
+                {hindi ? "वार्ड फ़िल्टर:" : "Ward filter:"}{" "}
+                <strong>
+                  {selectedWard.wardName} ({selectedWard.wardId})
+                </strong>
+              </span>
+              <button type="button" onClick={() => selectWard(null)}>
+                {hindi ? "हटाएँ" : "Clear"}
+              </button>
+            </p>
+          )}
 
           <section className="dashboard-ward-table-wrap">
             <div className="dashboard-section-head">

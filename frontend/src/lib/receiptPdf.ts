@@ -8,10 +8,17 @@ export type ReceiptPdfInput = {
   fields?: Field[];
 };
 
+function pdfSafe(text: string): string {
+  const normalized = text.normalize("NFKC").replace(/\s+/g, " ").trim();
+  if (!normalized) return "Not provided";
+  const ascii = normalized.replace(/[^\u0020-\u007E]/g, " ").replace(/\s+/g, " ").trim();
+  return ascii || "Details recorded (non-Latin text omitted in PDF)";
+}
+
 function formatFieldValue(field: Field): string {
   if (field.value == null || field.value === "") return "Not provided";
   if (field.id === "photo") return "Attached";
-  return String(field.value).replace(/\s+/g, " ").trim();
+  return pdfSafe(String(field.value));
 }
 
 function safeFilename(reference: string): string {
@@ -58,18 +65,18 @@ export function downloadReceiptPdf({ receipt, serviceName, fields = [] }: Receip
   addLine("Demo receipt only. Not sent to a live government department.", 9);
   addGap(6);
 
-  addLine(`Service request ID: ${receipt.reference}`, 12, "bold");
+  addLine(`Service request ID: ${pdfSafe(receipt.reference)}`, 12, "bold");
   if (receipt.access_key) {
-    addLine(`Access key: ${receipt.access_key}`, 12, "bold");
+    addLine(`Access key: ${pdfSafe(receipt.access_key)}`, 12, "bold");
     addLine("Save this key to track your request.", 10);
   }
   addGap(4);
 
-  addLine(`Status: ${receipt.status}`);
-  addLine(`Department: ${receipt.department || "Civic services"}`);
-  addLine(`Submitted: ${new Date(receipt.timestamp).toLocaleString("en-IN")}`);
+  addLine(`Status: ${pdfSafe(receipt.status)}`);
+  addLine(`Department: ${pdfSafe(receipt.department || "Civic services")}`);
+  addLine(`Submitted: ${pdfSafe(new Date(receipt.timestamp).toLocaleString("en-IN"))}`);
   if (serviceName) {
-    addLine(`Service: ${serviceName}`);
+    addLine(`Service: ${pdfSafe(serviceName)}`);
   }
 
   const detailFields = fields.filter(
