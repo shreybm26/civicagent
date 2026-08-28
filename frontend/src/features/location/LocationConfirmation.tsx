@@ -140,12 +140,10 @@ export function LocationConfirmation({
     return (
       <div className="chat-step location-step location-collapsed">
         <p className="location-hint">
-          {hindi
-            ? "नीचे हैदराबाद का स्थान या स्थलचिह्न लिखें, या मानचित्र से चुनें।"
-            : "Type a Hyderabad landmark below, or pick it on the map."}
+          {hindi ? "या मानचित्र से चुनें" : "Or pick on the map"}
         </p>
         <button type="button" className="primary location-open" disabled={busy} onClick={() => setOpen(true)}>
-          {hindi ? "मानचित्र से चुनें" : "Pick on map"}
+          {hindi ? "मानचित्र" : "Pick on map"}
         </button>
       </div>
     );

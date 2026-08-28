@@ -169,10 +169,11 @@ export default function App() {
 
   let contextualStep = null;
   let contextualKey = "";
+  let footerStep = null;
   if (session) {
     if (showLocation) {
       contextualKey = `location:${session.state}`;
-      contextualStep = (
+      footerStep = (
         <LocationConfirmation
           onConfirm={(pick) =>
             run(() => api.resolveLocationPin(session.session_id, pick), "Location could not be confirmed.", "resolving_location")
@@ -359,6 +360,8 @@ export default function App() {
                       : undefined
                   }
                   composerSubmitLabel={showLocation ? (hindi ? "स्थान भेजें" : "Send location") : undefined}
+                  footerStep={footerStep}
+                  composerMode={showLocation ? "location" : "default"}
                   contextualStep={
                     session.state === "COMPLETED" && session.receipt ? (
                       <ReceiptPanel

@@ -13,9 +13,12 @@ type Props = {
   hindi: boolean;
   showSuggestions: boolean;
   contextualStep?: ReactNode;
+  /** Rendered between the transcript and composer — stays visible without scrolling the thread. */
+  footerStep?: ReactNode;
   /** Stable id for the current step so the widget stays mounted across busy/stream. */
   contextualKey?: string;
   composerEnabled?: boolean;
+  composerMode?: "default" | "location";
   composerLabel?: string;
   composerPlaceholder?: string;
   composerSubmitLabel?: string;
@@ -35,8 +38,10 @@ export function ChatPanel({
   hindi,
   showSuggestions,
   contextualStep,
+  footerStep,
   contextualKey = "",
   composerEnabled = true,
+  composerMode = "default",
   composerLabel,
   composerPlaceholder,
   composerSubmitLabel,
@@ -51,6 +56,8 @@ export function ChatPanel({
   const [stepReady, setStepReady] = useState(false);
   const endRef = useRef<HTMLDivElement | null>(null);
   const messagesRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useRef<HTMLFormElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const nearBottomRef = useRef(true);
   const completedRef = useRef<Set<string>>(new Set());
 
@@ -90,6 +97,15 @@ export function ChatPanel({
   }, [contextualStep, contextualKey, busy, needsStream]);
 
   const showContextual = Boolean(contextualStep) && Boolean(contextualKey) && stepReady;
+
+  useEffect(() => {
+    if (composerMode !== "location" || !composerEnabled) return;
+    const timer = window.setTimeout(() => {
+      inputRef.current?.focus({ preventScroll: true });
+      composerRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [composerMode, composerEnabled, contextualKey]);
 
   function stickMessagesToBottom() {
     const box = messagesRef.current;
@@ -148,7 +164,10 @@ export function ChatPanel({
   const latestAgent = [...displayMessages].reverse().find((message) => message.role === "agent");
 
   return (
-    <section className="chat" aria-labelledby="assistant-title">
+    <section
+      className={`chat${composerMode === "location" ? " chat--location-mode" : ""}`}
+      aria-labelledby="assistant-title"
+    >
       <div className="chat-head">
         <CivicSevakAvatar size="header" state={avatarState} />
         <div>
@@ -248,13 +267,20 @@ export function ChatPanel({
         </div>
       )}
 
+      {footerStep && <div className="chat-footer-step">{footerStep}</div>}
+
       {composerEnabled && (
-        <form onSubmit={submit} className="composer">
+        <form
+          ref={composerRef}
+          onSubmit={submit}
+          className={`composer${composerMode === "location" ? " composer--location" : ""}`}
+        >
           <label htmlFor="message">
             {composerLabel ?? (hindi ? "शिकायत लिखें" : "Describe the issue")}
           </label>
           <div>
             <input
+              ref={inputRef}
               id="message"
               value={value}
               onChange={(event) => setValue(event.target.value)}
