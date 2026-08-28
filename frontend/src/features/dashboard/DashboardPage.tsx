@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { CivicApiError, api } from "../../lib/api";
-import type { DashboardSummary, PublicTicketRow, TicketStatus } from "../../lib/types";
+import type { DashboardSummary, PublicTicketRow, ServiceId, TicketStatus } from "../../lib/types";
 import { GhmcChoropleth, type WardGeoJson } from "../../components/charts/GhmcChoropleth";
 
 const STATUS_FILTERS: Array<{ id: TicketStatus | "all"; labelEn: string; labelHi: string }> = [
@@ -9,8 +9,20 @@ const STATUS_FILTERS: Array<{ id: TicketStatus | "all"; labelEn: string; labelHi
   { id: "in_progress", labelEn: "In Progress", labelHi: "प्रगति पर" },
   { id: "completed", labelEn: "Completed", labelHi: "पूर्ण" },
 ];
+
+const SERVICE_FILTERS: Array<{ id: ServiceId | "all"; labelEn: string; labelHi: string }> = [
+  { id: "all", labelEn: "All issues", labelHi: "सभी मुद्दे" },
+  { id: "road_issue", labelEn: "Road / pothole", labelHi: "सड़क / गड्ढा" },
+  { id: "garbage_issue", labelEn: "Garbage", labelHi: "कचरा" },
+  { id: "streetlight_issue", labelEn: "Streetlight", labelHi: "स्ट्रीटलाइट" },
+  { id: "water_issue", labelEn: "Water leak", labelHi: "पानी रिसाव" },
+  { id: "sanitation_issue", labelEn: "Sanitation", labelHi: "स्वच्छता" },
+];
+
 const WARD_PREVIEW_COUNT = 10;
 const TICKET_PREVIEW_COUNT = 12;
+
+type WardOption = { wardId: string; wardName: string };
 
 function relativeDate(value: string, hindi: boolean): string {
   const date = new Date(value);
@@ -36,11 +48,28 @@ function statusLabel(status: TicketStatus, hindi: boolean): string {
   return "Completed";
 }
 
+function wardsFromMap(wardMap: WardGeoJson | null): WardOption[] {
+  if (!wardMap?.features?.length) return [];
+  const seen = new Set<string>();
+  const rows: WardOption[] = [];
+  for (const feature of wardMap.features) {
+    const wardId = feature.properties?.ward_id;
+    const wardName = feature.properties?.ward_name;
+    if (!wardId || !wardName || seen.has(wardId)) continue;
+    seen.add(wardId);
+    rows.push({ wardId, wardName });
+  }
+  return rows.sort((left, right) => left.wardName.localeCompare(right.wardName));
+}
+
 export function DashboardPage({ hindi, onTrack }: { hindi: boolean; onTrack: () => void }) {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [tickets, setTickets] = useState<PublicTicketRow[]>([]);
   const [wardMap, setWardMap] = useState<WardGeoJson | null>(null);
-  const [filter, setFilter] = useState<TicketStatus | "all">("all");
+  const [statusFilter, setStatusFilter] = useState<TicketStatus | "all">("all");
+  const [serviceFilter, setServiceFilter] = useState<ServiceId | "all">("all");
+  const [selectedWard, setSelectedWard] = useState<WardOption | null>(null);
+  const [wardSearch, setWardSearch] = useState("");
   const [showAllWards, setShowAllWards] = useState(false);
   const [showAllTickets, setShowAllTickets] = useState(false);
   const [error, setError] = useState("");
@@ -50,11 +79,7 @@ export function DashboardPage({ hindi, onTrack }: { hindi: boolean; onTrack: () 
     let active = true;
     setBusy(true);
     setError("");
-    Promise.all([
-      api.dashboardSummary(),
-      api.dashboardTickets(undefined, 50),
-      api.dashboardWardMap(),
-    ])
+    Promise.all([api.dashboardSummary(), api.dashboardTickets({ limit: 50 }), api.dashboardWardMap()])
       .then(([nextSummary, nextTickets, nextMap]) => {
         if (!active) return;
         setSummary(nextSummary);
@@ -81,27 +106,68 @@ export function DashboardPage({ hindi, onTrack }: { hindi: boolean; onTrack: () 
 
   useEffect(() => {
     api
-      .dashboardTickets(filter === "all" ? undefined : filter, 50)
+      .dashboardTickets({
+        status: statusFilter === "all" ? undefined : statusFilter,
+        serviceId: serviceFilter === "all" ? undefined : serviceFilter,
+        wardId: selectedWard?.wardId,
+        limit: 50,
+      })
       .then(setTickets)
       .catch(() => undefined);
-  }, [filter]);
+  }, [statusFilter, serviceFilter, selectedWard]);
 
   useEffect(() => {
     setShowAllTickets(false);
-  }, [filter]);
+  }, [statusFilter, serviceFilter, selectedWard]);
+
+  const allWards = useMemo(() => wardsFromMap(wardMap), [wardMap]);
+  const wardSearchMatches = useMemo(() => {
+    const query = wardSearch.trim().toLowerCase();
+    if (!query) return [];
+    return allWards
+      .filter(
+        (ward) =>
+          ward.wardName.toLowerCase().includes(query) ||
+          ward.wardId.includes(query) ||
+          `ward ${ward.wardId}`.includes(query),
+      )
+      .slice(0, 8);
+  }, [allWards, wardSearch]);
 
   const topWards = useMemo(() => (summary?.wards ?? []).slice(0, 3), [summary]);
   const visibleWards = useMemo(() => {
     const wards = summary?.wards ?? [];
-    return showAllWards ? wards : wards.slice(0, WARD_PREVIEW_COUNT);
-  }, [showAllWards, summary?.wards]);
+    const query = wardSearch.trim().toLowerCase();
+    const filtered = query
+      ? wards.filter(
+          (ward) =>
+            ward.ward_name.toLowerCase().includes(query) ||
+            ward.ward_id.includes(query),
+        )
+      : wards;
+    return showAllWards ? filtered : filtered.slice(0, WARD_PREVIEW_COUNT);
+  }, [showAllWards, summary?.wards, wardSearch]);
   const visibleTickets = useMemo(
     () => (showAllTickets ? tickets : tickets.slice(0, TICKET_PREVIEW_COUNT)),
     [showAllTickets, tickets],
   );
   const wardTotal = summary?.wards.length ?? 0;
-  const hasMoreWards = wardTotal > WARD_PREVIEW_COUNT;
+  const filteredWardTotal = useMemo(() => {
+    const query = wardSearch.trim().toLowerCase();
+    if (!query) return wardTotal;
+    return (summary?.wards ?? []).filter(
+      (ward) => ward.ward_name.toLowerCase().includes(query) || ward.ward_id.includes(query),
+    ).length;
+  }, [summary?.wards, wardSearch, wardTotal]);
+  const hasMoreWards = filteredWardTotal > WARD_PREVIEW_COUNT;
   const hasMoreTickets = tickets.length > TICKET_PREVIEW_COUNT;
+
+  function selectWard(next: WardOption | null) {
+    setSelectedWard(next);
+    if (next) {
+      setWardSearch(next.wardName);
+    }
+  }
 
   return (
     <>
@@ -133,7 +199,25 @@ export function DashboardPage({ hindi, onTrack }: { hindi: boolean; onTrack: () 
         <p className="dashboard-loading">{hindi ? "डैशबोर्ड लोड हो रहा है…" : "Loading dashboard…"}</p>
       ) : summary ? (
         <>
-          <GhmcChoropleth data={wardMap} hindi={hindi} />
+          <GhmcChoropleth
+            data={wardMap}
+            hindi={hindi}
+            selectedWardId={selectedWard?.wardId ?? null}
+            onWardSelect={(ward) => selectWard(ward)}
+          />
+          {selectedWard && (
+            <p className="dashboard-active-filter">
+              <span>
+                {hindi ? "वार्ड फ़िल्टर:" : "Ward filter:"}{" "}
+                <strong>
+                  {selectedWard.wardName} ({selectedWard.wardId})
+                </strong>
+              </span>
+              <button type="button" onClick={() => selectWard(null)}>
+                {hindi ? "हटाएँ" : "Clear"}
+              </button>
+            </p>
+          )}
           <section className="dashboard-stats" aria-label={hindi ? "सारांश" : "Summary"}>
             <article className="dashboard-stat-card">
               <span>{hindi ? "कुल मुद्दे" : "Total issues"}</span>
@@ -187,17 +271,46 @@ export function DashboardPage({ hindi, onTrack }: { hindi: boolean; onTrack: () 
 
           <section className="dashboard-ward-table-wrap">
             <div className="dashboard-section-head">
-              <h2>{hindi ? "वार्ड हॉटस्पॉट" : "Ward hotspots"}</h2>
-              <p>
-                {hindi
-                  ? showAllWards
-                    ? `सभी ${wardTotal} वार्ड`
-                    : `शीर्ष ${Math.min(WARD_PREVIEW_COUNT, wardTotal)} में से ${wardTotal} वार्ड`
-                  : showAllWards
-                    ? `All ${wardTotal} wards`
-                    : `Top ${Math.min(WARD_PREVIEW_COUNT, wardTotal)} of ${wardTotal} wards`}
-              </p>
+              <div>
+                <h2>{hindi ? "वार्ड हॉटस्पॉट" : "Ward hotspots"}</h2>
+                <p>
+                  {hindi
+                    ? showAllWards
+                      ? `सभी ${filteredWardTotal} वार्ड`
+                      : `शीर्ष ${Math.min(WARD_PREVIEW_COUNT, filteredWardTotal)} में से ${filteredWardTotal} वार्ड`
+                    : showAllWards
+                      ? `All ${filteredWardTotal} wards`
+                      : `Top ${Math.min(WARD_PREVIEW_COUNT, filteredWardTotal)} of ${filteredWardTotal} wards`}
+                </p>
+              </div>
+              <label className="dashboard-ward-search">
+                <span>{hindi ? "वार्ड खोजें" : "Search wards"}</span>
+                <input
+                  type="search"
+                  value={wardSearch}
+                  placeholder={hindi ? "नाम या वार्ड नंबर" : "Name or ward number"}
+                  onChange={(event) => {
+                    setWardSearch(event.target.value);
+                    if (!event.target.value.trim()) selectWard(null);
+                  }}
+                />
+              </label>
             </div>
+            {wardSearchMatches.length > 0 && (
+              <ul className="dashboard-ward-search-results" role="listbox" aria-label={hindi ? "वार्ड परिणाम" : "Ward results"}>
+                {wardSearchMatches.map((ward) => (
+                  <li key={ward.wardId}>
+                    <button
+                      type="button"
+                      className={selectedWard?.wardId === ward.wardId ? "active" : undefined}
+                      onClick={() => selectWard(ward)}
+                    >
+                      Ward {ward.wardId} — {ward.wardName}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
             <div className={`dashboard-table-scroll${showAllWards ? " dashboard-table-scroll--expanded" : ""}`}>
               <table className="dashboard-ward-table">
                 <thead>
@@ -211,10 +324,32 @@ export function DashboardPage({ hindi, onTrack }: { hindi: boolean; onTrack: () 
                 </thead>
                 <tbody>
                   {visibleWards.map((ward) => (
-                    <tr key={`${ward.ward_id}-${ward.ward_name}`} className={topWards.includes(ward) ? "dashboard-ward-hot" : undefined}>
+                    <tr
+                      key={`${ward.ward_id}-${ward.ward_name}`}
+                      className={[
+                        topWards.includes(ward) ? "dashboard-ward-hot" : "",
+                        selectedWard?.wardId === ward.ward_id ? "dashboard-ward-selected" : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ") || undefined}
+                    >
                       <th scope="row">
-                        {ward.ward_name}
-                        {ward.ward_id !== ward.ward_name.toLowerCase().replace(/\s+/g, "-") ? ` (${ward.ward_id})` : ""}
+                        <button
+                          type="button"
+                          className="dashboard-ward-link"
+                          onClick={() =>
+                            selectWard(
+                              selectedWard?.wardId === ward.ward_id
+                                ? null
+                                : { wardId: ward.ward_id, wardName: ward.ward_name },
+                            )
+                          }
+                        >
+                          {ward.ward_name}
+                          {ward.ward_id !== ward.ward_name.toLowerCase().replace(/\s+/g, "-")
+                            ? ` (${ward.ward_id})`
+                            : ""}
+                        </button>
                       </th>
                       <td>{ward.total}</td>
                       <td>{ward.pending}</td>
@@ -233,8 +368,8 @@ export function DashboardPage({ hindi, onTrack }: { hindi: boolean; onTrack: () 
                       ? "कम दिखाएँ"
                       : "Show fewer wards"
                     : hindi
-                      ? `सभी ${wardTotal} वार्ड दिखाएँ`
-                      : `Show all ${wardTotal} wards`}
+                      ? `सभी ${filteredWardTotal} वार्ड दिखाएँ`
+                      : `Show all ${filteredWardTotal} wards`}
                 </button>
               </p>
             )}
@@ -254,17 +389,35 @@ export function DashboardPage({ hindi, onTrack }: { hindi: boolean; onTrack: () 
                       : `Latest ${Math.min(TICKET_PREVIEW_COUNT, tickets.length)} reports`}
                 </p>
               </div>
-              <div className="dashboard-filter-chips" role="tablist" aria-label={hindi ? "स्थिति फ़िल्टर" : "Status filters"}>
-                {STATUS_FILTERS.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={filter === item.id ? "active" : undefined}
-                    onClick={() => setFilter(item.id)}
-                  >
-                    {hindi ? item.labelHi : item.labelEn}
-                  </button>
-                ))}
+              <div className="dashboard-filter-groups">
+                <div className="dashboard-filter-chips" role="tablist" aria-label={hindi ? "स्थिति फ़िल्टर" : "Status filters"}>
+                  {STATUS_FILTERS.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={statusFilter === item.id ? "active" : undefined}
+                      onClick={() => setStatusFilter(item.id)}
+                    >
+                      {hindi ? item.labelHi : item.labelEn}
+                    </button>
+                  ))}
+                </div>
+                <div
+                  className="dashboard-filter-chips dashboard-filter-chips--service"
+                  role="tablist"
+                  aria-label={hindi ? "मुद्दा प्रकार" : "Issue type filters"}
+                >
+                  {SERVICE_FILTERS.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={serviceFilter === item.id ? "active" : undefined}
+                      onClick={() => setServiceFilter(item.id)}
+                    >
+                      {hindi ? item.labelHi : item.labelEn}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
             <div className={`dashboard-table-scroll${showAllTickets ? " dashboard-table-scroll--expanded" : ""}`}>
@@ -280,18 +433,26 @@ export function DashboardPage({ hindi, onTrack }: { hindi: boolean; onTrack: () 
                   </tr>
                 </thead>
                 <tbody>
-                  {visibleTickets.map((ticket) => (
-                    <tr key={`${ticket.ref_masked}-${ticket.reported_at}`}>
-                      <td>{ticket.ref_masked}</td>
-                      <td>{ticket.service_label}</td>
-                      <td>{ticket.ward_name}</td>
-                      <td>{ticket.department}</td>
-                      <td>
-                        <span className={statusClass(ticket.status)}>{statusLabel(ticket.status, hindi)}</span>
+                  {visibleTickets.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="dashboard-empty-row">
+                        {hindi ? "इस फ़िल्टर के लिए कोई शिकायत नहीं।" : "No tickets match these filters."}
                       </td>
-                      <td>{relativeDate(ticket.reported_at, hindi)}</td>
                     </tr>
-                  ))}
+                  ) : (
+                    visibleTickets.map((ticket) => (
+                      <tr key={`${ticket.ref_masked}-${ticket.reported_at}`}>
+                        <td>{ticket.ref_masked}</td>
+                        <td>{ticket.service_label}</td>
+                        <td>{ticket.ward_name}</td>
+                        <td>{ticket.department}</td>
+                        <td>
+                          <span className={statusClass(ticket.status)}>{statusLabel(ticket.status, hindi)}</span>
+                        </td>
+                        <td>{relativeDate(ticket.reported_at, hindi)}</td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>

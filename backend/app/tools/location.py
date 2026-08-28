@@ -1,8 +1,7 @@
-"""Location resolver: curated Hyderabad aliases, then OpenStreetMap search.
+"""Location resolver: curated Hyderabad aliases, then bounded OpenStreetMap search.
 
-Typed places must not depend on an LLM inventing coordinates. The map pin
-already reverse-geocodes through Nominatim; typed chat/landmark text uses the
-same forward search so Junnasandra, Bengaluru (or any Indian place) can be stored.
+Typed places must not depend on an LLM inventing coordinates. All locations in this
+GHMC prototype are restricted to the Hyderabad metropolitan area.
 """
 
 from __future__ import annotations
@@ -33,6 +32,42 @@ VAGUE_QUERIES = {
     "here",
     "nearby",
 }
+
+HYDERABAD_BOUNDS = {
+    "min_lat": 17.25,
+    "max_lat": 17.65,
+    "min_lng": 78.20,
+    "max_lng": 78.65,
+}
+
+OUTSIDE_SERVICE_CITIES = (
+    "bengaluru",
+    "bangalore",
+    "mumbai",
+    "delhi",
+    "new delhi",
+    "chennai",
+    "kolkata",
+    "pune",
+    "ahmedabad",
+    "jaipur",
+    "lucknow",
+    "kochi",
+    "mysuru",
+    "mysore",
+    "gurgaon",
+    "gurugram",
+    "noida",
+    "chandigarh",
+    "koramangala",
+    "koramangla",
+)
+
+HYDERABAD_MARKERS = (
+    "hyderabad",
+    "secunderabad",
+    "telangana",
+)
 
 
 @dataclass(frozen=True)
@@ -75,32 +110,36 @@ FILLER_PREFIX = re.compile(
     re.IGNORECASE,
 )
 
-KNOWN_CITIES = (
-    "bengaluru",
-    "bangalore",
-    "hyderabad",
-    "secunderabad",
-    "mumbai",
-    "delhi",
-    "new delhi",
-    "chennai",
-    "kolkata",
-    "pune",
-    "ahmedabad",
-    "jaipur",
-    "lucknow",
-    "kochi",
-    "mysuru",
-    "mysore",
-    "gurgaon",
-    "gurugram",
-    "noida",
-    "chandigarh",
-)
-
 
 def _normalize(value: str) -> str:
     return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9\u0900-\u097f ]", " ", value.casefold())).strip()
+
+
+def outside_service_area_message() -> str:
+    return "This demo only covers Hyderabad (GHMC). Share a Hyderabad landmark or pin it on the map."
+
+
+def is_within_hyderabad_bounds(lat: float, lng: float) -> bool:
+    return (
+        HYDERABAD_BOUNDS["min_lat"] <= lat <= HYDERABAD_BOUNDS["max_lat"]
+        and HYDERABAD_BOUNDS["min_lng"] <= lng <= HYDERABAD_BOUNDS["max_lng"]
+    )
+
+
+def mentions_outside_service_area(text: str) -> bool:
+    normalized = _normalize(text)
+    if any(marker in normalized for marker in HYDERABAD_MARKERS):
+        return False
+    return any(city in normalized for city in OUTSIDE_SERVICE_CITIES)
+
+
+def address_looks_hyderabad(address: str) -> bool:
+    normalized = _normalize(address)
+    return "hyderabad" in normalized or "secunderabad" in normalized
+
+
+def validate_hyderabad_coordinates(lat: float, lng: float) -> bool:
+    return is_within_hyderabad_bounds(lat, lng)
 
 
 def strip_location_filler(text: str) -> str:
@@ -121,7 +160,21 @@ def _looks_complete(text: str) -> bool:
     if len([part for part in cleaned.split(",") if part.strip()]) >= 2:
         return True
     normalized = _normalize(cleaned)
-    return any(city in normalized for city in KNOWN_CITIES)
+    return any(marker in normalized for marker in HYDERABAD_MARKERS) or any(
+        city in normalized for city in OUTSIDE_SERVICE_CITIES
+    )
+
+
+def _with_hyderabad_context(query: str) -> str:
+    cleaned = query.strip(" ,")
+    if not cleaned:
+        return cleaned
+    normalized = _normalize(cleaned)
+    if _looks_complete(cleaned):
+        return cleaned
+    if any(marker in normalized for marker in HYDERABAD_MARKERS):
+        return cleaned
+    return f"{cleaned}, Hyderabad, Telangana"
 
 
 def compose_location_query(text: str, prior_query: str | None = None) -> str:
@@ -145,8 +198,9 @@ def candidate_location_queries(text: str, prior_query: str | None = None) -> lis
             return
         ordered.append(query)
 
-    if prior and not _looks_complete(cleaned):
+    if prior and not _looks_complete(cleaned) and not mentions_outside_service_area(prior):
         add(f"{cleaned}, {prior}")
+    add(_with_hyderabad_context(cleaned))
     add(cleaned)
     return ordered or [text.strip()]
 
@@ -157,7 +211,7 @@ def _short_address(display_name: str) -> str:
 
 
 def nominatim_search(query: str) -> GeocodeHits:
-    """Forward-geocode an Indian place. Returns [] on network/parse failure."""
+    """Forward-geocode within the Hyderabad metropolitan viewbox."""
 
     try:
         response = httpx.get(
@@ -168,6 +222,8 @@ def nominatim_search(query: str) -> GeocodeHits:
                 "countrycodes": "in",
                 "limit": "5",
                 "addressdetails": "1",
+                "viewbox": "78.20,17.65,78.65,17.25",
+                "bounded": "1",
             },
             headers={
                 "User-Agent": NOMINATIM_USER_AGENT,
@@ -183,6 +239,12 @@ def nominatim_search(query: str) -> GeocodeHits:
     return payload if isinstance(payload, list) else []
 
 
+def _hit_is_hyderabad(lat: float, lng: float, address: str) -> bool:
+    if is_within_hyderabad_bounds(lat, lng):
+        return True
+    return address_looks_hyderabad(address)
+
+
 def _geocode_hits_to_result(query: str, hits: GeocodeHits) -> LocationResult:
     usable: list[tuple[float, float, str]] = []
     seen: set[tuple[float, float]] = set()
@@ -195,21 +257,22 @@ def _geocode_hits_to_result(query: str, hits: GeocodeHits) -> LocationResult:
         name = hit.get("display_name")
         if not isinstance(name, str) or not name.strip():
             continue
+        address = _short_address(name)
+        if not _hit_is_hyderabad(lat, lng, address):
+            continue
         key = (round(lat, 3), round(lng, 3))
         if key in seen:
             continue
         seen.add(key)
-        usable.append((lat, lng, _short_address(name)))
+        usable.append((lat, lng, address))
 
     if not usable:
         return LocationResult(
             query=query,
             needs_clarification=True,
-            message="Couldn't find that. Try a landmark and city, or pin it on the map.",
+            message=outside_service_area_message(),
         )
 
-    # Several OSM rows for one locality is normal (ward, suburb, bus stop).
-    # Pick the top match so chat does not loop; the citizen can still correct it later.
     lat, lng, address = usable[0]
     return LocationResult(
         query=query,
@@ -265,6 +328,13 @@ def resolve_location(
     if _normalize(raw) in VAGUE_QUERIES or _normalize(cleaned) in VAGUE_QUERIES:
         return LocationResult(query=raw, needs_clarification=True, message="Please share a landmark, area, or street.")
 
+    if mentions_outside_service_area(cleaned) or (prior_query and mentions_outside_service_area(prior_query)):
+        return LocationResult(
+            query=raw,
+            needs_clarification=True,
+            message=outside_service_area_message(),
+        )
+
     for candidate in (cleaned, raw):
         curated = _curated_match(candidate)
         if curated is not None:
@@ -280,5 +350,5 @@ def resolve_location(
     return last or LocationResult(
         query=cleaned or raw,
         needs_clarification=True,
-        message="Couldn't find that. Try a landmark and city, or pin it on the map.",
+        message=outside_service_area_message(),
     )

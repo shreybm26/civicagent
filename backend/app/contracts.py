@@ -380,6 +380,7 @@ class PublicTicketRow(ContractModel):
     ref_masked: str
     service_id: ServiceId
     service_label: str
+    ward_id: str
     ward_name: str
     department: str
     status: TicketStatus

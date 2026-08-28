@@ -24,6 +24,7 @@ from .contracts import (
     MessageIn,
     PublicTicketRow,
     SessionView,
+    ServiceId,
     TicketStatus,
     TrackEmailIn,
     TrackIn,
@@ -246,7 +247,12 @@ def build_api_router(
         return build_summary(records)
 
     @router.get("/api/public/dashboard/tickets", response_model=list[PublicTicketRow])
-    def dashboard_tickets(status: TicketStatus | None = None, limit: int = 50) -> list[PublicTicketRow]:
+    def dashboard_tickets(
+        status: TicketStatus | None = None,
+        service_id: ServiceId | None = None,
+        ward_id: str | None = None,
+        limit: int = 50,
+    ) -> list[PublicTicketRow]:
         capped = min(max(limit, 1), 100)
         try:
             records = grievance_store.list_recent(500)
@@ -255,7 +261,13 @@ def build_api_router(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=_error("DASHBOARD_UNAVAILABLE", str(exc), True),
             ) from exc
-        return build_public_tickets(records, status_filter=status, limit=capped)
+        return build_public_tickets(
+            records,
+            status_filter=status,
+            service_id_filter=service_id,
+            ward_id_filter=ward_id,
+            limit=capped,
+        )
 
     @router.get("/api/public/dashboard/ward-map")
     def dashboard_ward_map() -> dict[str, object]:

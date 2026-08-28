@@ -99,6 +99,8 @@ def build_public_tickets(
     records: list[StoredGrievance],
     *,
     status_filter: TicketStatus | None = None,
+    service_id_filter: ServiceId | None = None,
+    ward_id_filter: str | None = None,
     limit: int = 50,
     lookup: WardLookup | None = None,
 ) -> list[PublicTicketRow]:
@@ -109,12 +111,17 @@ def build_public_tickets(
         if status_filter and status != status_filter:
             continue
         ward = ward_for_record(record.payload, lookup)
+        if ward_id_filter and ward.ward_id != ward_id_filter:
+            continue
         service_id = record.service_id if record.service_id in SERVICE_LABELS else "road_issue"
+        if service_id_filter and service_id != service_id_filter:
+            continue
         rows.append(
             PublicTicketRow(
                 ref_masked=mask_sr_id(record.sr_id),
                 service_id=service_id,  # type: ignore[arg-type]
                 service_label=SERVICE_LABELS.get(record.service_id, record.service_id),
+                ward_id=ward.ward_id,
                 ward_name=ward.ward_name,
                 department=record.department,
                 status=status,

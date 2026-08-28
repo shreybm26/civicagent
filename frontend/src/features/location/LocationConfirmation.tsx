@@ -5,6 +5,14 @@ import "leaflet/dist/leaflet.css";
 type Pick = { lat: number; lng: number; label: string };
 
 const MAP_CENTER: [number, number] = [17.385, 78.4867];
+const HYDERABAD_BOUNDS = L.latLngBounds(
+  [17.25, 78.2],
+  [17.65, 78.65],
+);
+
+function isWithinHyderabad(lat: number, lng: number): boolean {
+  return HYDERABAD_BOUNDS.contains([lat, lng]);
+}
 
 export function LocationConfirmation({
   onConfirm,
@@ -22,8 +30,19 @@ export function LocationConfirmation({
   const [open, setOpen] = useState(false);
   const [pick, setPick] = useState<Pick | null>(null);
   const [locating, setLocating] = useState(false);
+  const [mapError, setMapError] = useState("");
 
   async function update(next: { lat: number; lng: number }) {
+    if (!isWithinHyderabad(next.lat, next.lng)) {
+      setPick(null);
+      setMapError(
+        hindi
+          ? "यह डेमो केवल हैदराबाद (GHMC) में स्थान स्वीकार करता है।"
+          : "This demo only accepts locations within Hyderabad (GHMC).",
+      );
+      return;
+    }
+    setMapError("");
     setPick({ ...next, label: `Pinned location (${next.lat.toFixed(5)}, ${next.lng.toFixed(5)})` });
     try {
       const response = await fetch(
@@ -45,7 +64,13 @@ export function LocationConfirmation({
       iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
       shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
     });
-    const map = L.map(containerRef.current, { center: MAP_CENTER, zoom: 13, scrollWheelZoom: true });
+    const map = L.map(containerRef.current, {
+      center: MAP_CENTER,
+      zoom: 13,
+      scrollWheelZoom: true,
+      maxBounds: HYDERABAD_BOUNDS.pad(0.05),
+      maxBoundsViscosity: 1,
+    });
     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
@@ -84,6 +109,15 @@ export function LocationConfirmation({
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const next = { lat: position.coords.latitude, lng: position.coords.longitude };
+        if (!isWithinHyderabad(next.lat, next.lng)) {
+          setMapError(
+            hindi
+              ? "आपका वर्तमान स्थान हैदराबाद के बाहर है। मानचित्र पर पिन लगाएँ।"
+              : "Your current location is outside Hyderabad. Drop a pin on the map instead.",
+          );
+          setLocating(false);
+          return;
+        }
         if (!markerRef.current && mapRef.current) {
           const marker = L.marker(next, { draggable: true }).addTo(mapRef.current);
           marker.on("dragend", () => {
@@ -107,8 +141,8 @@ export function LocationConfirmation({
       <div className="chat-step location-step location-collapsed">
         <p className="location-hint">
           {hindi
-            ? "नीचे स्थान या स्थलचिह्न लिखें, या मानचित्र से चुनें।"
-            : "Type your location in the box below, or pick it on the map."}
+            ? "नीचे हैदराबाद का स्थान या स्थलचिह्न लिखें, या मानचित्र से चुनें।"
+            : "Type a Hyderabad landmark below, or pick it on the map."}
         </p>
         <button type="button" className="primary location-open" disabled={busy} onClick={() => setOpen(true)}>
           {hindi ? "मानचित्र से चुनें" : "Pick on map"}
@@ -125,8 +159,17 @@ export function LocationConfirmation({
           {hindi ? "बंद करें" : "Close"}
         </button>
       </div>
-      <p>{hindi ? "मानचित्र पर टैप करें या पिन खींचें।" : "Click the map or drag the pin, then confirm the selected location."}</p>
+      <p>
+        {hindi
+          ? "केवल हैदराबाद (GHMC) — मानचित्र पर टैप करें या पिन खींचें।"
+          : "Hyderabad (GHMC) only — click the map or drag the pin, then confirm."}
+      </p>
       <div ref={containerRef} className="location-map" aria-label="Draggable location map" />
+      {mapError && (
+        <p className="error" role="alert">
+          {mapError}
+        </p>
+      )}
       <p className="selected-location">
         <strong>{hindi ? "चयनित:" : "Selected:"}</strong>{" "}
         {pick?.label || (hindi ? "अभी कुछ नहीं चुना" : "None selected yet")}

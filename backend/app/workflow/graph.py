@@ -39,7 +39,7 @@ from ..policy.guardrails import (
     safe_citizen_message,
     validate_schema_authority,
 )
-from ..tools.location import resolve_location
+from ..tools.location import resolve_location, validate_hyderabad_coordinates, outside_service_area_message
 from ..tools.submit import SubmissionError, submit_state
 from ..integration_adapters import RegistrySchemaAdapter, SchemaRouterAdapter, SchemaCollectorAdapter, ImageAnalyzerAdapter
 from .schema import ServiceSchema, field_value_is_valid, mock_service_schemas
@@ -139,6 +139,8 @@ class WorkflowGraph:
             raise WorkflowError("Identify a service before resolving a location")
         if not result.address or result.lat is None or result.lng is None:
             raise WorkflowError("A selected location requires a label and coordinates")
+        if not validate_hyderabad_coordinates(result.lat, result.lng):
+            raise WorkflowError(outside_service_area_message())
         next_state = state.model_copy(deep=True)
         if next_state.state == "COLLECTING":
             next_state.state = transition(next_state.state, "location_requested")

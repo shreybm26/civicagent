@@ -133,7 +133,7 @@ export default function App() {
       <div className="gov-shell">
         <UtilityBar hindi={false} onLanguage={() => undefined} onFont={() => undefined} fontStep={1} />
         <Tricolor />
-        <Masthead hindi={false} stateLabel="Starting" onReset={() => undefined} busy />
+        <Masthead hindi={false} onReset={() => undefined} busy />
         <main id="main" className="page">
           <p className="notice-banner">{error || activityLabel("starting", false)}</p>
         </main>
@@ -252,7 +252,6 @@ export default function App() {
       <Tricolor />
       <Masthead
         hindi={hindi}
-        stateLabel={stateLabel || session?.state || "Tracking"}
         onReset={() => session && run(() => api.reset(session.session_id), "Reset failed.", "resetting")}
         busy={busy}
         showReset={!onStandalonePage}
@@ -355,8 +354,8 @@ export default function App() {
                   composerPlaceholder={
                     showLocation
                       ? hindi
-                        ? "उदाहरण: JNTU मेट्रो के पास, Kukatpally"
-                        : "Example: Near JNTU Metro, Kukatpally"
+                        ? "हैदराबाद स्थलचिह्न, उदा. JNTU मेट्रो, Kukatpally"
+                        : "Hyderabad landmark, e.g. Near JNTU Metro, Kukatpally"
                       : undefined
                   }
                   composerSubmitLabel={showLocation ? (hindi ? "स्थान भेजें" : "Send location") : undefined}
@@ -461,13 +460,11 @@ function Tricolor() {
 
 function Masthead({
   hindi,
-  stateLabel,
   onReset,
   busy,
   showReset = true,
 }: {
   hindi: boolean;
-  stateLabel: string;
   onReset: () => void;
   busy: boolean;
   showReset?: boolean;
@@ -483,7 +480,6 @@ function Masthead({
         </div>
       </div>
       <div className="masthead-actions">
-        <p className="live-status">{stateLabel}</p>
         {showReset && (
           <button type="button" onClick={onReset} disabled={busy}>
             {hindi ? "आवेदन रीसेट" : "Reset application"}

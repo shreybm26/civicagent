@@ -24,6 +24,7 @@ def _record(
     lat: float = 17.49,
     lng: float = 78.39,
     ward_name: str = "Kukatpally",
+    ward_id: str = "101",
 ) -> StoredGrievance:
     return StoredGrievance(
         sr_id=sr_id,
@@ -39,7 +40,7 @@ def _record(
                 "lat": lat,
                 "lng": lng,
             },
-            "ward": {"ward_id": "101", "ward_name": ward_name},
+            "ward": {"ward_id": ward_id, "ward_name": ward_name},
         },
         created_at=datetime(2026, 8, 27, 12, 0, tzinfo=timezone.utc),
     )
@@ -70,9 +71,30 @@ def test_public_ticket_list_omits_sensitive_fields() -> None:
     rows = build_public_tickets([_record("CIV-20260827-0001-K7M2")])
     dumped = rows[0].model_dump()
     assert dumped["ref_masked"] == "···-K7M2"
+    assert dumped["ward_id"] == "101"
     assert "access_key" not in dumped
     assert "key_hash" not in dumped
     assert "fields" not in dumped
+
+
+def test_public_ticket_filters_by_status_service_and_ward() -> None:
+    records = [
+        _record("CIV-1", status="pending", service_id="road_issue", ward_name="Kukatpally"),
+        _record("CIV-2", status="completed", service_id="garbage_issue", ward_name="Gachibowli", ward_id="102"),
+        _record("CIV-3", status="pending", service_id="garbage_issue", ward_name="Kukatpally"),
+    ]
+    assert len(build_public_tickets(records, status_filter="pending")) == 2
+    assert len(build_public_tickets(records, service_id_filter="garbage_issue")) == 2
+    assert len(build_public_tickets(records, ward_id_filter="101")) == 2
+    combined = build_public_tickets(
+        records,
+        status_filter="pending",
+        service_id_filter="garbage_issue",
+        ward_id_filter="101",
+    )
+    assert len(combined) == 1
+    assert combined[0].service_id == "garbage_issue"
+    assert combined[0].status == "pending"
 
 
 def test_status_update_changes_track_timeline(tmp_path: Path) -> None:
@@ -147,6 +169,10 @@ def test_dashboard_public_routes_return_redacted_payload(tmp_path: Path) -> None
     assert len(body) == 2
     assert all("access_key" not in row for row in body)
     assert all("key_hash" not in row for row in body)
+    assert all("ward_id" in row for row in body)
+
+    filtered = client.get("/api/public/dashboard/tickets", params={"service_id": "road_issue", "ward_id": "101"})
+    assert filtered.status_code == 200
 
     ward_map = client.get("/api/public/dashboard/ward-map")
     assert ward_map.status_code == 200

@@ -819,6 +819,74 @@ button.primary, .composer button.primary, .location .primary, .review .primary, 
   text-align: left;
 }
 .dashboard-ward-hot { background: #fff8eb; }
+.dashboard-ward-selected { background: #eef8f1; }
+.dashboard-ward-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: var(--navy);
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.dashboard-ward-search {
+  display: grid;
+  gap: 6px;
+  min-width: min(100%, 240px);
+}
+.dashboard-ward-search span { font-size: 13px; font-weight: 700; color: var(--muted); }
+.dashboard-ward-search input {
+  padding: 10px 11px;
+  border: 1px solid #7f8c98;
+  border-radius: 2px;
+  font: inherit;
+}
+.dashboard-ward-search-results {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.dashboard-ward-search-results button {
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  background: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+.dashboard-ward-search-results button.active,
+.dashboard-ward-search-results button:hover {
+  background: #eef8f1;
+  border-color: #9ec9ae;
+}
+.dashboard-active-filter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 12px 0 0;
+  padding: 10px 14px;
+  background: #eef8f1;
+  border: 1px solid #9ec9ae;
+}
+.dashboard-active-filter button {
+  border: 1px solid #7f8c98;
+  background: #fff;
+  padding: 6px 10px;
+  font: inherit;
+  cursor: pointer;
+}
+.dashboard-empty-row {
+  text-align: center;
+  color: var(--muted);
+  padding: 18px 12px;
+}
 .dashboard-ticket-head {
   display: flex;
   justify-content: space-between;
@@ -831,6 +899,8 @@ button.primary, .composer button.primary, .location .primary, .review .primary, 
   margin-bottom: 0;
 }
 .dashboard-filter-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.dashboard-filter-groups { display: grid; gap: 10px; justify-items: end; }
+.dashboard-filter-chips--service button { background: #f7fbff; }
 .dashboard-filter-chips button {
   border: 1px solid #afbbc5;
   background: #fff;

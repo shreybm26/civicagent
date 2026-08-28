@@ -129,7 +129,7 @@ def test_completed_session_can_start_a_different_schema() -> None:
     assert switched.state.receipt is None
 
 
-def test_typed_location_outside_the_hyderabad_list_is_geocoded_and_stored() -> None:
+def test_typed_location_outside_hyderabad_is_rejected() -> None:
     graph = WorkflowGraph()
     identified = graph.handle_message(new_state(), "There is a huge pothole and a bike almost fell")
     hits = [
@@ -143,8 +143,25 @@ def test_typed_location_outside_the_hyderabad_list_is_geocoded_and_stored() -> N
         located = graph.handle_message(identified.state, "in junnasandra, bengaluru")
 
     assert located.state.location is not None
+    assert located.state.location.address is None
+    assert located.state.state == "LOCATION_REQUIRED"
+    assert "Hyderabad" in located.message
+
+
+def test_typed_hyderabad_location_is_geocoded_and_stored() -> None:
+    graph = WorkflowGraph()
+    identified = graph.handle_message(new_state(), "There is a huge pothole and a bike almost fell")
+    hits = [
+        {
+            "lat": "17.4180",
+            "lon": "78.4570",
+            "display_name": "Abids, Hyderabad, Telangana, India",
+        }
+    ]
+    with patch("app.tools.location.nominatim_search", return_value=hits):
+        located = graph.handle_message(identified.state, "near abids clock tower")
+
+    assert located.state.location is not None
     assert located.state.location.source == "geocoded"
-    assert located.state.location.lat == 12.8921
-    assert located.state.location.lng == 77.6954
-    values = {field.id: field for field in located.state.fields}
-    assert "Junnasandra" in str(values["location"].value)
+    assert located.state.location.lat == 17.4180
+    assert located.state.location.lng == 78.4570

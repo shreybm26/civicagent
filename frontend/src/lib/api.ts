@@ -1,4 +1,4 @@
-import type { DashboardSummary, EmailSentView, PublicTicketRow, SessionView, TrackingView } from "./types";
+import type { DashboardSummary, EmailSentView, PublicTicketRow, ServiceId, SessionView, TicketStatus, TrackingView } from "./types";
 
 export type CivicApi = {
   createSession(): Promise<SessionView>;
@@ -13,7 +13,12 @@ export type CivicApi = {
   track(srId: string, accessKey: string): Promise<TrackingView>;
   sendTrackEmail(srId: string, accessKey: string, email: string, confirmSend: boolean): Promise<EmailSentView>;
   dashboardSummary(): Promise<DashboardSummary>;
-  dashboardTickets(status?: string, limit?: number): Promise<PublicTicketRow[]>;
+  dashboardTickets(options?: {
+    status?: TicketStatus;
+    serviceId?: ServiceId;
+    wardId?: string;
+    limit?: number;
+  }): Promise<PublicTicketRow[]>;
   dashboardWardMap(): Promise<GeoJSON.FeatureCollection>;
 };
 
@@ -116,10 +121,17 @@ export const api: CivicApi = {
       }),
     }),
   dashboardSummary: () => callJson<DashboardSummary>("/api/public/dashboard/summary"),
-  dashboardTickets: (status, limit = 50) => {
+  dashboardTickets: (options?: {
+    status?: TicketStatus;
+    serviceId?: ServiceId;
+    wardId?: string;
+    limit?: number;
+  }) => {
     const params = new URLSearchParams();
-    if (status) params.set("status", status);
-    params.set("limit", String(limit));
+    if (options?.status) params.set("status", options.status);
+    if (options?.serviceId) params.set("service_id", options.serviceId);
+    if (options?.wardId) params.set("ward_id", options.wardId);
+    params.set("limit", String(options?.limit ?? 50));
     const query = params.toString();
     return callJson<PublicTicketRow[]>(`/api/public/dashboard/tickets${query ? `?${query}` : ""}`);
   },

@@ -18,6 +18,11 @@ export type WardGeoJson = GeoJSON.FeatureCollection<GeoJSON.Geometry, WardProps>
 const CHART_SCALES = ["#138808", "#c9a227", "#ff9933", "#c45c00", "#922d2d"];
 const NO_DATA_FILL = "#d8e0ea";
 
+type WardPathLayer = L.Path & {
+  feature?: GeoJSON.Feature<GeoJSON.Geometry, WardProps>;
+  getBounds(): L.LatLngBounds;
+};
+
 function colorForOpenRatio(ratio: number, total: number): string {
   if (total <= 0) return NO_DATA_FILL;
   if (ratio <= 0) return CHART_SCALES[0];
@@ -67,18 +72,46 @@ function frameWardLayer(
   updatePanBounds(map, bounds, baseZoom, baseZoom);
 }
 
+function styleForWard(props: WardProps, selectedWardId: string | null): L.PathOptions {
+  const wardId = props.ward_id ?? "";
+  const isSelected = Boolean(selectedWardId && wardId === selectedWardId);
+  const isDimmed = Boolean(selectedWardId && wardId !== selectedWardId);
+  return {
+    color: isSelected ? "#0b3a6e" : "#ffffff",
+    weight: isSelected ? 3 : 1.25,
+    opacity: 1,
+    fillColor: colorForOpenRatio(props.open_ratio ?? 0, props.total ?? 0),
+    fillOpacity: isDimmed ? 0.28 : isSelected ? 1 : 0.92,
+  };
+}
+
 export function GhmcChoropleth({
   data,
   hindi = false,
+  selectedWardId = null,
+  onWardSelect,
 }: {
   data: WardGeoJson | null;
   hindi?: boolean;
+  selectedWardId?: string | null;
+  onWardSelect?: (ward: { wardId: string; wardName: string } | null) => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.GeoJSON | null>(null);
+  const pathsRef = useRef<Map<string, WardPathLayer>>(new Map());
   const baseZoomRef = useRef(11);
   const boundsRef = useRef<L.LatLngBounds | null>(null);
+  const onWardSelectRef = useRef(onWardSelect);
+  const selectedWardIdRef = useRef(selectedWardId);
+
+  useEffect(() => {
+    onWardSelectRef.current = onWardSelect;
+  }, [onWardSelect]);
+
+  useEffect(() => {
+    selectedWardIdRef.current = selectedWardId;
+  }, [selectedWardId]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -127,6 +160,7 @@ export function GhmcChoropleth({
       map.remove();
       mapRef.current = null;
       layerRef.current = null;
+      pathsRef.current.clear();
       boundsRef.current = null;
     };
   }, []);
@@ -139,29 +173,43 @@ export function GhmcChoropleth({
       layerRef.current.remove();
       layerRef.current = null;
     }
+    pathsRef.current.clear();
 
     const layer = L.geoJSON(data as GeoJSON.GeoJsonObject, {
       style(feature) {
         const props = (feature?.properties ?? {}) as WardProps;
-        return {
-          color: "#ffffff",
-          weight: 1.25,
-          opacity: 1,
-          fillColor: colorForOpenRatio(props.open_ratio ?? 0, props.total ?? 0),
-          fillOpacity: 0.92,
-        };
+        return styleForWard(props, selectedWardIdRef.current);
       },
       onEachFeature(feature, pathLayer) {
         const props = (feature.properties ?? {}) as WardProps;
-        pathLayer.bindTooltip(wardTooltip(props), { sticky: true, direction: "top" });
-        pathLayer.on({
+        const wardId = props.ward_id;
+        const layer = pathLayer as WardPathLayer;
+        layer.feature = feature as GeoJSON.Feature<GeoJSON.Geometry, WardProps>;
+        if (wardId) pathsRef.current.set(wardId, layer);
+        layer.bindTooltip(wardTooltip(props), { sticky: true, direction: "top" });
+        layer.on({
           mouseover: (event) => {
-            const target = event.target;
-            target.setStyle({ weight: 2.5, color: "#0b3a6e", fillOpacity: 0.98 });
+            const target = event.target as WardPathLayer;
+            const hoverProps = (target.feature?.properties ?? {}) as WardProps;
+            target.setStyle({
+              ...styleForWard(hoverProps, selectedWardIdRef.current),
+              weight: 2.5,
+              fillOpacity: 0.98,
+            });
             target.bringToFront();
           },
           mouseout: (event) => {
-            layer.resetStyle(event.target);
+            const target = event.target as WardPathLayer;
+            const hoverProps = (target.feature?.properties ?? {}) as WardProps;
+            target.setStyle(styleForWard(hoverProps, selectedWardIdRef.current));
+          },
+          click: () => {
+            if (!wardId) return;
+            const wardName = props.ward_name ?? wardLabel(props);
+            const current = selectedWardIdRef.current;
+            onWardSelectRef.current?.(
+              current === wardId ? null : { wardId, wardName },
+            );
           },
         });
       },
@@ -171,10 +219,29 @@ export function GhmcChoropleth({
     frameWardLayer(map, layer, baseZoomRef, boundsRef);
   }, [data]);
 
+  useEffect(() => {
+    pathsRef.current.forEach((path) => {
+      const props = (path.feature?.properties ?? {}) as WardProps;
+      path.setStyle(styleForWard(props, selectedWardId));
+    });
+    if (!selectedWardId) return;
+    const map = mapRef.current;
+    const path = pathsRef.current.get(selectedWardId);
+    if (!map || !path) return;
+    const bounds = path.getBounds();
+    if (!bounds.isValid()) return;
+    map.fitBounds(bounds, {
+      padding: [28, 28],
+      animate: true,
+      maxZoom: Math.min(baseZoomRef.current + 2, map.getMaxZoom()),
+    });
+  }, [selectedWardId]);
+
   function resetView() {
     const map = mapRef.current;
     const layer = layerRef.current;
     if (!map || !layer) return;
+    onWardSelectRef.current?.(null);
     frameWardLayer(map, layer, baseZoomRef, boundsRef);
   }
 
@@ -190,9 +257,13 @@ export function GhmcChoropleth({
     <section className="dashboard-map-block" aria-label={hindi ? "हैदराबाद वार्ड नक्शा" : "Hyderabad ward map"}>
       <div className="dashboard-map-toolbar">
         <span>
-          {hindi
-            ? "केवल GHMC वार्ड सीमाएँ — कोई बाहरी नक्शा नहीं"
-            : "GHMC ward boundaries only — no surrounding map"}
+          {selectedWardId
+            ? hindi
+              ? "वार्ड चयनित — शिकायतें फ़िल्टर हो रही हैं"
+              : "Ward selected — recent tickets are filtered"
+            : hindi
+              ? "वार्ड पर क्लिक करें या नीचे खोजें"
+              : "Click a ward or search below to filter tickets"}
         </span>
         <button type="button" onClick={resetView}>
           {hindi ? "रीसेट" : "Reset view"}
