@@ -29,6 +29,7 @@ export default function App() {
   const [hindi, setHindi] = useState(false);
   const [fontStep, setFontStep] = useState(1);
   const [avatarState, setAvatarState] = useState<AvatarState>("idle");
+  const [locationMapOpen, setLocationMapOpen] = useState(false);
   const successTimerRef = useRef<number | null>(null);
   const onTrackPage = path === "/track";
   const onDashboardPage = path === "/dashboard";
@@ -76,6 +77,16 @@ export default function App() {
     },
     [],
   );
+
+  useEffect(() => {
+    const locationMissing =
+      session?.fields.some(
+        (field) => field.id === "location" && (field.status === "missing" || field.value == null || field.value === ""),
+      ) ?? false;
+    const needsLocation =
+      session?.state === "LOCATION_REQUIRED" || (session?.state === "COLLECTING" && locationMissing);
+    if (!needsLocation) setLocationMapOpen(false);
+  }, [session]);
 
   async function run(
     task: () => Promise<SessionView>,
@@ -177,9 +188,11 @@ export default function App() {
   let footerStep = null;
   if (session) {
     if (showLocation) {
-      contextualKey = `location:${session.state}`;
-      footerStep = (
+      contextualKey = locationMapOpen ? `location-map:${session.state}` : "";
+      contextualStep = locationMapOpen ? (
         <LocationConfirmation
+          open
+          onOpenChange={setLocationMapOpen}
           onConfirm={(pick) =>
             run(() => api.resolveLocationPin(session.session_id, pick), "Location could not be confirmed.", "resolving_location")
           }
@@ -193,7 +206,17 @@ export default function App() {
           busy={busy}
           hindi={hindi}
         />
-      );
+      ) : null;
+      if (!locationMapOpen) {
+        footerStep = (
+          <div className="location-footer-compact">
+            <span>{hindi ? "या मानचित्र से चुनें" : "Or pick on the map"}</span>
+            <button type="button" className="primary" disabled={busy} onClick={() => setLocationMapOpen(true)}>
+              {hindi ? "मानचित्र खोलें" : "Open map"}
+            </button>
+          </div>
+        );
+      }
     } else if (hasLocation && !imageHandled) {
       contextualKey = `evidence:${session.state}:${rejectedReason ? "retry" : "ask"}`;
       contextualStep = (

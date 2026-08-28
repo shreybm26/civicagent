@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import type { Field, Receipt } from "../../lib/types";
 import { downloadReceiptPdf } from "../../lib/receiptPdf";
 import { CredentialRow } from "./CredentialRow";
@@ -18,9 +19,21 @@ export function ReceiptPanel({
   onTrack: () => void;
   hindi: boolean;
 }) {
+  const [pdfDownloaded, setPdfDownloaded] = useState(false);
+  const pdfTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (pdfTimerRef.current) window.clearTimeout(pdfTimerRef.current);
+    };
+  }, []);
+
   function handleDownloadPdf() {
     try {
       downloadReceiptPdf({ receipt, serviceName, fields });
+      setPdfDownloaded(true);
+      if (pdfTimerRef.current) window.clearTimeout(pdfTimerRef.current);
+      pdfTimerRef.current = window.setTimeout(() => setPdfDownloaded(false), 2000);
     } catch {
       window.alert(
         hindi ? "PDF डाउनलोड नहीं हो सका। कृपया पुनः प्रयास करें।" : "PDF download failed. Please try again.",
@@ -66,8 +79,18 @@ export function ReceiptPanel({
           : "Demo receipt only. This application was not sent to a live government department. Use the access key above to track this request."}
       </p>
       <div className="receipt-actions">
-        <button type="button" className="primary" onClick={handleDownloadPdf}>
-          {hindi ? "PDF डाउनलोड" : "Download PDF"}
+        <button
+          type="button"
+          className={`primary${pdfDownloaded ? " success" : ""}`}
+          onClick={handleDownloadPdf}
+        >
+          {pdfDownloaded
+            ? hindi
+              ? "PDF डाउनलोड हो गया"
+              : "PDF downloaded"
+            : hindi
+              ? "PDF डाउनलोड"
+              : "Download PDF"}
         </button>
         <button type="button" className="primary" onClick={onTrack}>
           {hindi ? "यह आवेदन ट्रैक करें" : "Track this request"}

@@ -267,7 +267,8 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
   background: #fff;
 }
 .chat-inline-step .location-map {
-  height: 180px;
+  height: 280px;
+  min-height: 280px;
   width: 100%;
   border: 1px solid var(--line);
   background: #e8eef4;
@@ -422,21 +423,20 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
   background: #fff;
   border-top: 1px solid #edf0f2;
 }
-.chat-footer-step .location-step {
+.location-footer-compact {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  padding-bottom: 10px;
+}
+.location-footer-compact span {
+  color: var(--muted);
+  font-size: 13px;
+  flex: 1 1 180px;
+}
+.location-footer-compact button {
   margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-}
-.chat-footer-step .location-step.location-step:not(.location-collapsed) {
-  max-height: min(42vh, 360px);
-  overflow: auto;
-}
-.chat-footer-step .location-map {
-  height: 180px;
-  width: 100%;
-  border: 1px solid var(--line);
-  background: #e8eef4;
 }
 .composer--location {
   background: #fff8eb;
@@ -464,6 +464,11 @@ button.primary, .composer button.primary, .location .primary, .review .primary, 
   background: #c45c00;
   color: #fff;
   border-color: #a34c00;
+}
+button.primary.success {
+  background: var(--india-green);
+  border-color: #0d6a06;
+  color: #fff;
 }
 
 .status-line { margin: 12px 16px 0; color: var(--muted); }

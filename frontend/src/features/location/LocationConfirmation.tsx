@@ -18,19 +18,34 @@ export function LocationConfirmation({
   onConfirm,
   busy,
   hindi,
+  open: controlledOpen,
+  onOpenChange,
 }: {
   onConfirm: (pick: Pick) => void;
   onResolveText?: (text: string) => void;
   busy?: boolean;
   hindi?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
   const [pick, setPick] = useState<Pick | null>(null);
   const [locating, setLocating] = useState(false);
   const [mapError, setMapError] = useState("");
+
+  const open = controlledOpen ?? internalOpen;
+
+  function setOpen(next: boolean) {
+    if (controlledOpen === undefined) setInternalOpen(next);
+    onOpenChange?.(next);
+    if (!next) {
+      setPick(null);
+      setMapError("");
+    }
+  }
 
   async function update(next: { lat: number; lng: number }) {
     if (!isWithinHyderabad(next.lat, next.lng)) {
@@ -91,11 +106,13 @@ export function LocationConfirmation({
     });
 
     mapRef.current = map;
-    const observer = new ResizeObserver(() => map.invalidateSize({ animate: false }));
+    const refreshSize = () => map.invalidateSize({ animate: false });
+    const observer = new ResizeObserver(refreshSize);
     observer.observe(containerRef.current);
-    const timer = window.setTimeout(() => map.invalidateSize({ animate: false }), 100);
+    refreshSize();
+    const timers = [50, 150, 400].map((delay) => window.setTimeout(refreshSize, delay));
     return () => {
-      window.clearTimeout(timer);
+      timers.forEach((id) => window.clearTimeout(id));
       observer.disconnect();
       map.remove();
       mapRef.current = null;
@@ -143,7 +160,7 @@ export function LocationConfirmation({
           {hindi ? "या मानचित्र से चुनें" : "Or pick on the map"}
         </p>
         <button type="button" className="primary location-open" disabled={busy} onClick={() => setOpen(true)}>
-          {hindi ? "मानचित्र" : "Pick on map"}
+          {hindi ? "मानचित्र खोलें" : "Open map"}
         </button>
       </div>
     );

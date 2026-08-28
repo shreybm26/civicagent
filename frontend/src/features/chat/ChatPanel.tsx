@@ -107,6 +107,13 @@ export function ChatPanel({
     return () => window.clearTimeout(timer);
   }, [composerMode, composerEnabled, contextualKey]);
 
+  useEffect(() => {
+    if (!contextualKey.startsWith("location-map:")) return;
+    nearBottomRef.current = true;
+    const timer = window.setTimeout(() => stickMessagesToBottom(), 180);
+    return () => window.clearTimeout(timer);
+  }, [contextualKey]);
+
   function stickMessagesToBottom() {
     const box = messagesRef.current;
     if (!box || !nearBottomRef.current) return;
