@@ -145,6 +145,8 @@ class Receipt(ContractModel):
     department: str | None = None
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     access_key: str | None = None
+    ward_id: str | None = None
+    ward_name: str | None = None
 
 
 class CivicError(ContractModel):
@@ -320,6 +322,8 @@ class TrackingView(ContractModel):
     service_id: str | None = None
     submitted_at: datetime
     location: str | None = None
+    ward_id: str | None = None
+    ward_name: str | None = None
     fields: list[TrackingField] = Field(default_factory=list)
     timeline: list[TimelineStep] = Field(default_factory=list)
     nearby: list[NearbyReport] = Field(default_factory=list)
@@ -384,6 +388,18 @@ class PublicTicketRow(ContractModel):
     ward_name: str
     department: str
     status: TicketStatus
+    reported_at: datetime
+
+
+class PublicTicketPin(ContractModel):
+    ref_masked: str
+    service_id: ServiceId
+    service_label: str
+    ward_id: str
+    ward_name: str
+    status: TicketStatus
+    lat: float
+    lng: float
     reported_at: datetime
 
 

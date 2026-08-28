@@ -1,4 +1,21 @@
-import type { DashboardSummary, EmailSentView, PublicTicketRow, ServiceId, SessionView, TicketStatus, TrackingView } from "./types";
+import type { DashboardSummary, EmailSentView, PublicTicketPin, PublicTicketRow, ServiceId, SessionView, TicketStatus, TrackingView } from "./types";
+
+export type DashboardFilterOptions = {
+  status?: TicketStatus;
+  serviceId?: ServiceId;
+  wardId?: string;
+  limit?: number;
+};
+
+function dashboardQuery(options?: DashboardFilterOptions): string {
+  const params = new URLSearchParams();
+  if (options?.status) params.set("status", options.status);
+  if (options?.serviceId) params.set("service_id", options.serviceId);
+  if (options?.wardId) params.set("ward_id", options.wardId);
+  if (options?.limit != null) params.set("limit", String(options.limit));
+  const query = params.toString();
+  return query ? `?${query}` : "";
+}
 
 export type CivicApi = {
   createSession(): Promise<SessionView>;
@@ -12,14 +29,10 @@ export type CivicApi = {
   reset(id: string): Promise<SessionView>;
   track(srId: string, accessKey: string): Promise<TrackingView>;
   sendTrackEmail(srId: string, accessKey: string, email: string, confirmSend: boolean): Promise<EmailSentView>;
-  dashboardSummary(): Promise<DashboardSummary>;
-  dashboardTickets(options?: {
-    status?: TicketStatus;
-    serviceId?: ServiceId;
-    wardId?: string;
-    limit?: number;
-  }): Promise<PublicTicketRow[]>;
-  dashboardWardMap(): Promise<GeoJSON.FeatureCollection>;
+  dashboardSummary(options?: Omit<DashboardFilterOptions, "limit">): Promise<DashboardSummary>;
+  dashboardTickets(options?: DashboardFilterOptions): Promise<PublicTicketRow[]>;
+  dashboardWardMap(options?: Omit<DashboardFilterOptions, "limit">): Promise<GeoJSON.FeatureCollection>;
+  dashboardPins(options?: DashboardFilterOptions): Promise<PublicTicketPin[]>;
 };
 
 export class CivicApiError extends Error {
@@ -120,13 +133,8 @@ export const api: CivicApi = {
         confirm_send: confirmSend,
       }),
     }),
-  dashboardSummary: () => callJson<DashboardSummary>("/api/public/dashboard/summary"),
-  dashboardTickets: (options?: {
-    status?: TicketStatus;
-    serviceId?: ServiceId;
-    wardId?: string;
-    limit?: number;
-  }) => {
+  dashboardSummary: (options) => callJson<DashboardSummary>(`/api/public/dashboard/summary${dashboardQuery(options)}`),
+  dashboardTickets: (options) => {
     const params = new URLSearchParams();
     if (options?.status) params.set("status", options.status);
     if (options?.serviceId) params.set("service_id", options.serviceId);
@@ -135,7 +143,9 @@ export const api: CivicApi = {
     const query = params.toString();
     return callJson<PublicTicketRow[]>(`/api/public/dashboard/tickets${query ? `?${query}` : ""}`);
   },
-  dashboardWardMap: () => callJson<GeoJSON.FeatureCollection>("/api/public/dashboard/ward-map"),
+  dashboardWardMap: (options) =>
+    callJson<GeoJSON.FeatureCollection>(`/api/public/dashboard/ward-map${dashboardQuery(options)}`),
+  dashboardPins: (options) => callJson<PublicTicketPin[]>(`/api/public/dashboard/pins${dashboardQuery(options)}`),
 };
 
 export function isExpiredSession(error: unknown): boolean {

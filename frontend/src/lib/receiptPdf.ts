@@ -74,6 +74,13 @@ export function downloadReceiptPdf({ receipt, serviceName, fields = [] }: Receip
 
   addLine(`Status: ${pdfSafe(receipt.status)}`);
   addLine(`Department: ${pdfSafe(receipt.department || "Civic services")}`);
+  if (receipt.ward_name) {
+    const wardText =
+      receipt.ward_id && receipt.ward_id !== receipt.ward_name.toLowerCase().replace(/\s+/g, "-")
+        ? `Ward ${receipt.ward_id} — ${receipt.ward_name}`
+        : receipt.ward_name;
+    addLine(`Ward: ${pdfSafe(wardText)}`);
+  }
   addLine(`Submitted: ${pdfSafe(new Date(receipt.timestamp).toLocaleString("en-IN"))}`);
   if (serviceName) {
     addLine(`Service: ${pdfSafe(serviceName)}`);

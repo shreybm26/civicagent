@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import type { PublicTicketPin, TicketStatus } from "../../lib/types";
 
 type WardProps = {
   name?: string;
@@ -46,6 +47,21 @@ function wardTooltip(props: WardProps): string {
   return `${wardLabel(props)} · ${open} open · ${props.completed ?? 0} resolved · ${cleared}% cleared`;
 }
 
+function pinIcon(status: TicketStatus): L.DivIcon {
+  return L.divIcon({
+    className: "",
+    html: `<span class="dashboard-ticket-pin dashboard-ticket-pin--${status}" aria-hidden="true"></span>`,
+    iconSize: [16, 16],
+    iconAnchor: [8, 8],
+  });
+}
+
+function pinPopup(pin: PublicTicketPin): string {
+  const status =
+    pin.status === "pending" ? "Pending" : pin.status === "in_progress" ? "In progress" : "Completed";
+  return `<strong>${pin.ref_masked}</strong><br>${pin.service_label}<br>Ward ${pin.ward_id} — ${pin.ward_name}<br>${status}`;
+}
+
 function updatePanBounds(map: L.Map, bounds: L.LatLngBounds, baseZoom: number, zoom: number) {
   const zoomInSteps = Math.max(0, zoom - baseZoom);
   const pad = 0.05 + zoomInSteps * 0.035;
@@ -87,11 +103,13 @@ function styleForWard(props: WardProps, selectedWardId: string | null): L.PathOp
 
 export function GhmcChoropleth({
   data,
+  pins = [],
   hindi = false,
   selectedWardId = null,
   onWardSelect,
 }: {
   data: WardGeoJson | null;
+  pins?: PublicTicketPin[];
   hindi?: boolean;
   selectedWardId?: string | null;
   onWardSelect?: (ward: { wardId: string; wardName: string } | null) => void;
@@ -99,6 +117,8 @@ export function GhmcChoropleth({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.GeoJSON | null>(null);
+  const markersRef = useRef<L.LayerGroup | null>(null);
+  const tilesRef = useRef<L.TileLayer | null>(null);
   const pathsRef = useRef<Map<string, WardPathLayer>>(new Map());
   const baseZoomRef = useRef(11);
   const boundsRef = useRef<L.LatLngBounds | null>(null);
@@ -133,6 +153,19 @@ export function GhmcChoropleth({
       }
     };
 
+    const syncDetailMode = () => {
+      const detail = map.getZoom() > baseZoomRef.current + 0.35;
+      tilesRef.current?.setOpacity(detail ? 0.92 : 0);
+      pathsRef.current.forEach((path) => {
+        const props = (path.feature?.properties ?? {}) as WardProps;
+        const styled = styleForWard(props, selectedWardIdRef.current);
+        path.setStyle({
+          ...styled,
+          fillOpacity: detail ? Math.min(styled.fillOpacity ?? 0.92, 0.22) : styled.fillOpacity,
+        });
+      });
+    };
+
     const onZoomEnd = () => {
       if (map.getZoom() < baseZoomRef.current) {
         map.setZoom(baseZoomRef.current);
@@ -141,12 +174,20 @@ export function GhmcChoropleth({
       if (boundsRef.current) {
         updatePanBounds(map, boundsRef.current, baseZoomRef.current, map.getZoom());
       }
+      syncDetailMode();
     };
 
     containerRef.current.addEventListener("wheel", onWheel, { passive: false });
     map.on("zoomend", onZoomEnd);
 
     mapRef.current = map;
+    markersRef.current = L.layerGroup().addTo(map);
+    tilesRef.current = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+      attribution: "&copy; OpenStreetMap &copy; CARTO",
+      maxZoom: 19,
+      opacity: 0,
+    }).addTo(map);
+
     const observer = new ResizeObserver(() => {
       map.invalidateSize({ animate: false });
       if (layerRef.current) frameWardLayer(map, layerRef.current, baseZoomRef, boundsRef);
@@ -160,6 +201,8 @@ export function GhmcChoropleth({
       map.remove();
       mapRef.current = null;
       layerRef.current = null;
+      markersRef.current = null;
+      tilesRef.current = null;
       pathsRef.current.clear();
       boundsRef.current = null;
     };
@@ -220,6 +263,17 @@ export function GhmcChoropleth({
   }, [data]);
 
   useEffect(() => {
+    const group = markersRef.current;
+    if (!group) return;
+    group.clearLayers();
+    for (const pin of pins) {
+      L.marker([pin.lat, pin.lng], { icon: pinIcon(pin.status) })
+        .bindPopup(pinPopup(pin))
+        .addTo(group);
+    }
+  }, [pins]);
+
+  useEffect(() => {
     pathsRef.current.forEach((path) => {
       const props = (path.feature?.properties ?? {}) as WardProps;
       path.setStyle(styleForWard(props, selectedWardId));
@@ -259,6 +313,12 @@ export function GhmcChoropleth({
         {selectedWardId ? (
           <span>
             {hindi ? "वार्ड चयनित — शिकायतें फ़िल्टर हो रही हैं" : "Ward selected — tickets filtered"}
+          </span>
+        ) : pins.length > 0 ? (
+          <span>
+            {hindi
+              ? `${pins.length} शिकायतें नक्शे पर — ज़ूम इन करके विवरण देखें`
+              : `${pins.length} issue${pins.length === 1 ? "" : "s"} on map — zoom in for detail`}
           </span>
         ) : (
           <span>{hindi ? "वार्ड नक्शा" : "Ward map"}</span>

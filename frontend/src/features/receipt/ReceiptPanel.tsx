@@ -67,6 +67,16 @@ export function ReceiptPanel({
         <dd>{receipt.status}</dd>
         <dt>{hindi ? "विभाग" : "Department"}</dt>
         <dd>{receipt.department || (hindi ? "नागरिक सेवाएँ" : "Civic services")}</dd>
+        {receipt.ward_name && (
+          <>
+            <dt>{hindi ? "वार्ड" : "Ward"}</dt>
+            <dd>
+              {receipt.ward_id && receipt.ward_id !== receipt.ward_name.toLowerCase().replace(/\s+/g, "-")
+                ? `Ward ${receipt.ward_id} — ${receipt.ward_name}`
+                : receipt.ward_name}
+            </dd>
+          </>
+        )}
         <dt>{hindi ? "समय" : "Time"}</dt>
         <dd>{new Date(receipt.timestamp).toLocaleString("en-IN")}</dd>
       </dl>

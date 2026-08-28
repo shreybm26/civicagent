@@ -22,6 +22,7 @@ from .contracts import (
     MediaDecisionIn,
     Message,
     MessageIn,
+    PublicTicketPin,
     PublicTicketRow,
     SessionView,
     ServiceId,
@@ -30,7 +31,7 @@ from .contracts import (
     TrackIn,
     TrackingView,
 )
-from .dashboard import build_public_tickets, build_summary, build_ward_map_geojson
+from .dashboard import build_public_pins, build_public_tickets, build_summary, build_ward_map_geojson
 from .grievance_store import (
     GrievanceStore,
     GrievanceStoreError,
@@ -236,7 +237,11 @@ def build_api_router(
         return EmailSentView(sent=True, to=to_email)
 
     @router.get("/api/public/dashboard/summary", response_model=DashboardSummary)
-    def dashboard_summary() -> DashboardSummary:
+    def dashboard_summary(
+        status: TicketStatus | None = None,
+        service_id: ServiceId | None = None,
+        ward_id: str | None = None,
+    ) -> DashboardSummary:
         try:
             records = grievance_store.list_recent(500)
         except GrievanceStoreError as exc:
@@ -244,7 +249,12 @@ def build_api_router(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=_error("DASHBOARD_UNAVAILABLE", str(exc), True),
             ) from exc
-        return build_summary(records)
+        return build_summary(
+            records,
+            status_filter=status,
+            service_id_filter=service_id,
+            ward_id_filter=ward_id,
+        )
 
     @router.get("/api/public/dashboard/tickets", response_model=list[PublicTicketRow])
     def dashboard_tickets(
@@ -270,7 +280,11 @@ def build_api_router(
         )
 
     @router.get("/api/public/dashboard/ward-map")
-    def dashboard_ward_map() -> dict[str, object]:
+    def dashboard_ward_map(
+        status: TicketStatus | None = None,
+        service_id: ServiceId | None = None,
+        ward_id: str | None = None,
+    ) -> dict[str, object]:
         try:
             records = grievance_store.list_recent(500)
         except GrievanceStoreError as exc:
@@ -278,7 +292,35 @@ def build_api_router(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=_error("DASHBOARD_UNAVAILABLE", str(exc), True),
             ) from exc
-        return build_ward_map_geojson(records)
+        return build_ward_map_geojson(
+            records,
+            status_filter=status,
+            service_id_filter=service_id,
+            ward_id_filter=ward_id,
+        )
+
+    @router.get("/api/public/dashboard/pins", response_model=list[PublicTicketPin])
+    def dashboard_pins(
+        status: TicketStatus | None = None,
+        service_id: ServiceId | None = None,
+        ward_id: str | None = None,
+        limit: int = 200,
+    ) -> list[PublicTicketPin]:
+        capped = min(max(limit, 1), 300)
+        try:
+            records = grievance_store.list_recent(500)
+        except GrievanceStoreError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=_error("DASHBOARD_UNAVAILABLE", str(exc), True),
+            ) from exc
+        return build_public_pins(
+            records,
+            status_filter=status,
+            service_id_filter=service_id,
+            ward_id_filter=ward_id,
+            limit=capped,
+        )
 
     @router.patch("/api/demo/tickets/{sr_id}/status", response_model=TrackingView)
     def demo_update_ticket_status(sr_id: str, body: DemoStatusIn) -> TrackingView:

@@ -745,6 +745,22 @@ button.primary.success {
 .dashboard-hero-map .leaflet-tile-pane {
   background: transparent;
 }
+.dashboard-ticket-pin {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+.dashboard-ticket-pin--pending { background: #c45c00; }
+.dashboard-ticket-pin--in_progress { background: #c9a227; }
+.dashboard-ticket-pin--completed { background: var(--india-green); }
+.dashboard-hero-map .leaflet-popup-content {
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 10px 12px;
+}
 .dashboard-legend {
   display: flex;
   align-items: center;

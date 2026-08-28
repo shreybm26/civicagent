@@ -5,8 +5,8 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.contracts import FieldValue, Location, Receipt, SessionState
-from app.dashboard import build_public_tickets, build_summary, mask_sr_id
-from app.grievance_store import MemoryGrievanceStore, StoredGrievance, persist_submission
+from app.dashboard import build_public_pins, build_public_tickets, build_summary, mask_sr_id
+from app.grievance_store import MemoryGrievanceStore, StoredGrievance, persist_submission, snapshot_payload
 from app.mailer import build_acknowledgement_bodies
 from app.main import create_app
 from app.neighbourhood import assemble_tracking_view, demo_timeline
@@ -97,6 +97,33 @@ def test_public_ticket_filters_by_status_service_and_ward() -> None:
     assert combined[0].status == "pending"
 
 
+def test_summary_and_pins_respect_filters() -> None:
+    records = [
+        _record("CIV-1", status="pending", service_id="road_issue", ward_name="Kukatpally"),
+        _record("CIV-2", status="completed", service_id="garbage_issue", ward_name="Gachibowli", ward_id="102"),
+    ]
+    summary = build_summary(records, status_filter="pending", service_id_filter="road_issue", ward_id_filter="101")
+    assert summary.total == 1
+    assert summary.pending == 1
+    pins = build_public_pins(records, status_filter="pending", ward_id_filter="101")
+    assert len(pins) == 1
+    assert pins[0].ref_masked == "···-1"
+
+
+def test_snapshot_payload_stores_ward_from_location() -> None:
+    state = SessionState(
+        session_id=__import__("uuid").uuid4(),
+        state="SUBMITTING",
+        service_id="road_issue",
+        fields=[FieldValue(id="description", value="Large pothole", required=True, status="accepted")],
+        location=Location(query="JNTU", address="JNTU Metro Station", lat=17.49, lng=78.39, confidence=1.0),
+    )
+    payload = snapshot_payload(state)
+    assert "ward" in payload
+    assert payload["ward"]["ward_id"]
+    assert payload["ward"]["ward_name"]
+
+
 def test_status_update_changes_track_timeline(tmp_path: Path) -> None:
     store = MemoryGrievanceStore()
     state = SessionState(
@@ -108,7 +135,7 @@ def test_status_update_changes_track_timeline(tmp_path: Path) -> None:
     )
     schema = mock_service_schemas()["road_issue"]
     receipt = Receipt(reference="CIV-STATUS-1", status="pending", department=schema.department)
-    persist_submission(
+    access_key, _ = persist_submission(
         store,
         state=state,
         service_id=schema.service_id,
@@ -177,6 +204,11 @@ def test_dashboard_public_routes_return_redacted_payload(tmp_path: Path) -> None
     ward_map = client.get("/api/public/dashboard/ward-map")
     assert ward_map.status_code == 200
     assert ward_map.json()["type"] == "FeatureCollection"
+
+    pins = client.get("/api/public/dashboard/pins")
+    assert pins.status_code == 200
+    assert len(pins.json()) == 2
+    assert all("lat" in row and "lng" in row for row in pins.json())
 
 
 def test_email_html_contains_human_label_and_status_badge() -> None:

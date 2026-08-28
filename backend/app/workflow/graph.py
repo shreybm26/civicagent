@@ -330,7 +330,7 @@ class WorkflowGraph:
         next_state.state = transition(next_state.state, "citizen_confirms")
         try:
             receipt = submit_state(next_state, schema, self.backend, confirmed=confirmed)
-            access_key = persist_submission(
+            access_key, ward = persist_submission(
                 self.grievance_store,
                 state=next_state,
                 service_id=schema.service_id,
@@ -350,6 +350,8 @@ class WorkflowGraph:
             )
 
         receipt.access_key = access_key
+        receipt.ward_id = ward.ward_id
+        receipt.ward_name = ward.ward_name
         next_state.receipt = receipt
         next_state.error = None
         next_state.state = transition(next_state.state, "receipt")

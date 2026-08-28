@@ -48,7 +48,7 @@ def test_sqlite_store_persists_hash_not_plaintext(tmp_path: Path) -> None:
     state = _state_with_fields()
     schema = mock_service_schemas()["road_issue"]
     receipt = Receipt(reference="CIV-20260827-0001-TEST", status="pending", department=schema.department)
-    access_key = persist_submission(
+    access_key, ward = persist_submission(
         store,
         state=state,
         service_id=schema.service_id,
@@ -385,7 +385,7 @@ def test_track_email_sends_via_smtp_to_any_inbox(tmp_path: Path) -> None:
 def test_sqlite_list_recent_returns_newest_first(tmp_path: Path) -> None:
     store = SqliteGrievanceStore(tmp_path / "grievances.db")
     schema = mock_service_schemas()["road_issue"]
-    first = persist_submission(
+    first, _ = persist_submission(
         store,
         state=_state_with_fields(),
         service_id=schema.service_id,
@@ -398,7 +398,7 @@ def test_sqlite_list_recent_returns_newest_first(tmp_path: Path) -> None:
         ),
         pepper=PEPPER,
     )
-    second = persist_submission(
+    second, _ = persist_submission(
         store,
         state=_state_with_fields(),
         service_id=schema.service_id,

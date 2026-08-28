@@ -129,6 +129,16 @@ function TrackingResult({
             <dd>{record.location}</dd>
           </>
         )}
+        {record.ward_name && (
+          <>
+            <dt>{hindi ? "वार्ड" : "Ward"}</dt>
+            <dd>
+              {record.ward_id && record.ward_id !== record.ward_name.toLowerCase().replace(/\s+/g, "-")
+                ? `Ward ${record.ward_id} — ${record.ward_name}`
+                : record.ward_name}
+            </dd>
+          </>
+        )}
       </dl>
       {timeline.length > 0 && (
         <ol className="track-timeline">

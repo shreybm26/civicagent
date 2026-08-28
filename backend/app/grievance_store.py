@@ -24,6 +24,7 @@ from typing import Any, Protocol
 import httpx
 
 from .contracts import Receipt, SessionState, TicketStatus, TrackingField, TrackingView, normalize_ticket_status, ticket_status_label
+from .ward_lookup import WardInfo, ward_for_record
 
 ACCESS_KEY_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
@@ -88,16 +89,20 @@ def access_key_matches(access_key: str, key_hash: str, pepper: str) -> bool:
 def snapshot_payload(state: SessionState) -> dict[str, Any]:
     """Store filed values only — not the chat transcript or photo bytes."""
 
-    return {
+    location = state.location.model_dump(mode="json") if state.location else None
+    payload: dict[str, Any] = {
         "service_id": state.service_id,
         "schema_version": state.schema_version,
         "fields": [{"id": field.id, "value": field.value} for field in state.fields],
-        "location": state.location.model_dump(mode="json") if state.location else None,
+        "location": location,
         "evidence": [
             {"filename": item.filename, "relevant": item.relevant, "summary": item.summary}
             for item in state.evidence
         ],
     }
+    ward = ward_for_record(payload)
+    payload["ward"] = {"ward_id": ward.ward_id, "ward_name": ward.ward_name}
+    return payload
 
 
 def persist_submission(
@@ -108,8 +113,14 @@ def persist_submission(
     department: str,
     receipt: Receipt,
     pepper: str,
-) -> str:
+) -> tuple[str, WardInfo]:
     access_key = generate_access_key()
+    payload = snapshot_payload(state)
+    ward_data = payload.get("ward") if isinstance(payload.get("ward"), dict) else {}
+    ward = WardInfo(
+        ward_id=str(ward_data.get("ward_id") or "hyderabad"),
+        ward_name=str(ward_data.get("ward_name") or "Hyderabad"),
+    )
     created = receipt.timestamp if receipt.timestamp.tzinfo else receipt.timestamp.replace(tzinfo=timezone.utc)
     record = StoredGrievance(
         sr_id=normalize_sr_id(receipt.reference),
@@ -117,11 +128,11 @@ def persist_submission(
         service_id=service_id,
         department=department,
         status=receipt.status,
-        payload=snapshot_payload(state),
+        payload=payload,
         created_at=created,
     )
     store.save(record)
-    return access_key
+    return access_key, ward
 
 
 def tracking_view_from_record(record: StoredGrievance) -> TrackingView:
@@ -133,6 +144,7 @@ def tracking_view_from_record(record: StoredGrievance) -> TrackingView:
                 fields.append(TrackingField(id=str(item["id"]), value=item.get("value")))
     location = record.payload.get("location") if isinstance(record.payload.get("location"), dict) else None
     address = location.get("address") if location else None
+    ward = ward_for_record(record.payload)
     return TrackingView(
         sr_id=record.sr_id,
         status=ticket_status_label(record.status),
@@ -141,6 +153,8 @@ def tracking_view_from_record(record: StoredGrievance) -> TrackingView:
         service_id=record.service_id,
         submitted_at=record.created_at,
         location=address if isinstance(address, str) else None,
+        ward_id=ward.ward_id,
+        ward_name=ward.ward_name,
         fields=fields,
     )
 

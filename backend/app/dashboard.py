@@ -9,6 +9,7 @@ from typing import Any
 from .contracts import (
     DashboardSummary,
     DepartmentStats,
+    PublicTicketPin,
     PublicTicketRow,
     ServiceId,
     TicketStatus,
@@ -16,8 +17,8 @@ from .contracts import (
     normalize_ticket_status,
 )
 from .grievance_store import StoredGrievance
-from .neighbourhood import SERVICE_LABELS
-from .ward_lookup import WardInfo, WardLookup, get_ward_lookup, ward_for_record
+from .neighbourhood import SERVICE_LABELS, coords_from_payload
+from .ward_lookup import WardLookup, get_ward_lookup, ward_for_record
 
 STATUS_KEYS: tuple[TicketStatus, ...] = ("pending", "in_progress", "completed")
 
@@ -37,8 +38,46 @@ def _empty_status_counts() -> dict[TicketStatus, int]:
     return {key: 0 for key in STATUS_KEYS}
 
 
-def build_summary(records: list[StoredGrievance], lookup: WardLookup | None = None) -> DashboardSummary:
+def filter_records(
+    records: list[StoredGrievance],
+    *,
+    status_filter: TicketStatus | None = None,
+    service_id_filter: ServiceId | None = None,
+    ward_id_filter: str | None = None,
+    lookup: WardLookup | None = None,
+) -> list[StoredGrievance]:
     lookup = lookup or get_ward_lookup()
+    filtered: list[StoredGrievance] = []
+    for record in records:
+        status = _status_bucket(record)
+        if status_filter and status != status_filter:
+            continue
+        service_id = record.service_id if record.service_id in SERVICE_LABELS else "road_issue"
+        if service_id_filter and service_id != service_id_filter:
+            continue
+        ward = ward_for_record(record.payload, lookup)
+        if ward_id_filter and ward.ward_id != ward_id_filter:
+            continue
+        filtered.append(record)
+    return filtered
+
+
+def build_summary(
+    records: list[StoredGrievance],
+    lookup: WardLookup | None = None,
+    *,
+    status_filter: TicketStatus | None = None,
+    service_id_filter: ServiceId | None = None,
+    ward_id_filter: str | None = None,
+) -> DashboardSummary:
+    lookup = lookup or get_ward_lookup()
+    records = filter_records(
+        records,
+        status_filter=status_filter,
+        service_id_filter=service_id_filter,
+        ward_id_filter=ward_id_filter,
+        lookup=lookup,
+    )
     totals = _empty_status_counts()
     departments: dict[str, dict[TicketStatus, int]] = defaultdict(_empty_status_counts)
     wards: dict[tuple[str, str], dict[TicketStatus, int]] = defaultdict(_empty_status_counts)
@@ -105,17 +144,18 @@ def build_public_tickets(
     lookup: WardLookup | None = None,
 ) -> list[PublicTicketRow]:
     lookup = lookup or get_ward_lookup()
+    records = filter_records(
+        records,
+        status_filter=status_filter,
+        service_id_filter=service_id_filter,
+        ward_id_filter=ward_id_filter,
+        lookup=lookup,
+    )
     rows: list[PublicTicketRow] = []
     for record in records:
         status = _status_bucket(record)
-        if status_filter and status != status_filter:
-            continue
         ward = ward_for_record(record.payload, lookup)
-        if ward_id_filter and ward.ward_id != ward_id_filter:
-            continue
         service_id = record.service_id if record.service_id in SERVICE_LABELS else "road_issue"
-        if service_id_filter and service_id != service_id_filter:
-            continue
         rows.append(
             PublicTicketRow(
                 ref_masked=mask_sr_id(record.sr_id),
@@ -133,8 +173,66 @@ def build_public_tickets(
     return rows
 
 
-def ward_stats_for_map(records: list[StoredGrievance], lookup: WardLookup | None = None) -> dict[str, dict[str, Any]]:
+def build_public_pins(
+    records: list[StoredGrievance],
+    *,
+    status_filter: TicketStatus | None = None,
+    service_id_filter: ServiceId | None = None,
+    ward_id_filter: str | None = None,
+    limit: int = 200,
+    lookup: WardLookup | None = None,
+) -> list[PublicTicketPin]:
     lookup = lookup or get_ward_lookup()
+    records = filter_records(
+        records,
+        status_filter=status_filter,
+        service_id_filter=service_id_filter,
+        ward_id_filter=ward_id_filter,
+        lookup=lookup,
+    )
+    pins: list[PublicTicketPin] = []
+    for record in records:
+        coords = coords_from_payload(record.payload)
+        if coords is None:
+            continue
+        lat, lng = coords
+        status = _status_bucket(record)
+        ward = ward_for_record(record.payload, lookup)
+        service_id = record.service_id if record.service_id in SERVICE_LABELS else "road_issue"
+        pins.append(
+            PublicTicketPin(
+                ref_masked=mask_sr_id(record.sr_id),
+                service_id=service_id,  # type: ignore[arg-type]
+                service_label=SERVICE_LABELS.get(record.service_id, record.service_id),
+                ward_id=ward.ward_id,
+                ward_name=ward.ward_name,
+                status=status,
+                lat=lat,
+                lng=lng,
+                reported_at=record.created_at,
+            )
+        )
+        if len(pins) >= limit:
+            break
+    return pins
+
+
+def ward_stats_for_map(
+    records: list[StoredGrievance],
+    lookup: WardLookup | None = None,
+    *,
+    status_filter: TicketStatus | None = None,
+    service_id_filter: ServiceId | None = None,
+    ward_id_filter: str | None = None,
+) -> dict[str, dict[str, Any]]:
+    lookup = lookup or get_ward_lookup()
+    records = filter_records(
+        records,
+        status_filter=status_filter,
+        service_id_filter=service_id_filter,
+        ward_id_filter=ward_id_filter,
+        lookup=lookup,
+    )
     stats: dict[str, dict[str, Any]] = {}
     for record in records:
         ward = ward_for_record(record.payload, lookup)
@@ -159,9 +257,22 @@ def ward_stats_for_map(records: list[StoredGrievance], lookup: WardLookup | None
     return stats
 
 
-def build_ward_map_geojson(records: list[StoredGrievance], lookup: WardLookup | None = None) -> dict[str, Any]:
+def build_ward_map_geojson(
+    records: list[StoredGrievance],
+    lookup: WardLookup | None = None,
+    *,
+    status_filter: TicketStatus | None = None,
+    service_id_filter: ServiceId | None = None,
+    ward_id_filter: str | None = None,
+) -> dict[str, Any]:
     lookup = lookup or get_ward_lookup()
-    stats = ward_stats_for_map(records, lookup)
+    stats = ward_stats_for_map(
+        records,
+        lookup,
+        status_filter=status_filter,
+        service_id_filter=service_id_filter,
+        ward_id_filter=ward_id_filter,
+    )
     payload = lookup.load_geojson()
     features = []
     for feature in payload.get("features") or []:

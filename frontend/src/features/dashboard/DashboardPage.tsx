@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CivicApiError, api } from "../../lib/api";
 import { subscribeDashboardUpdated } from "../../lib/dashboardRefresh";
-import type { DashboardSummary, PublicTicketRow, ServiceId, TicketStatus } from "../../lib/types";
+import type { DashboardSummary, PublicTicketPin, PublicTicketRow, ServiceId, TicketStatus } from "../../lib/types";
 import { GhmcChoropleth, type WardGeoJson } from "../../components/charts/GhmcChoropleth";
 
 const STATUS_FILTERS: Array<{ id: TicketStatus | "all"; labelEn: string; labelHi: string }> = [
@@ -74,6 +74,7 @@ export function DashboardPage({
 }) {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [tickets, setTickets] = useState<PublicTicketRow[]>([]);
+  const [mapPins, setMapPins] = useState<PublicTicketPin[]>([]);
   const [wardMap, setWardMap] = useState<WardGeoJson | null>(null);
   const [statusFilter, setStatusFilter] = useState<TicketStatus | "all">("all");
   const [serviceFilter, setServiceFilter] = useState<ServiceId | "all">("all");
@@ -89,19 +90,21 @@ export function DashboardPage({
     setBusy(true);
     setError("");
     try {
-      const [nextSummary, nextTickets, nextMap] = await Promise.all([
-        api.dashboardSummary(),
-        api.dashboardTickets({
-          status: statusFilter === "all" ? undefined : statusFilter,
-          serviceId: serviceFilter === "all" ? undefined : serviceFilter,
-          wardId: selectedWard?.wardId,
-          limit: 50,
-        }),
-        api.dashboardWardMap(),
+      const filterOptions = {
+        status: statusFilter === "all" ? undefined : statusFilter,
+        serviceId: serviceFilter === "all" ? undefined : serviceFilter,
+        wardId: selectedWard?.wardId,
+      };
+      const [nextSummary, nextTickets, nextMap, nextPins] = await Promise.all([
+        api.dashboardSummary(filterOptions),
+        api.dashboardTickets({ ...filterOptions, limit: 50 }),
+        api.dashboardWardMap(filterOptions),
+        api.dashboardPins({ ...filterOptions, limit: 200 }),
       ]);
       setSummary(nextSummary);
       setTickets(nextTickets);
       setWardMap(nextMap as WardGeoJson);
+      setMapPins(nextPins);
     } catch (caught) {
       setError(
         caught instanceof CivicApiError
@@ -255,6 +258,7 @@ export function DashboardPage({
 
           <GhmcChoropleth
             data={wardMap}
+            pins={mapPins}
             hindi={hindi}
             selectedWardId={selectedWard?.wardId ?? null}
             onWardSelect={(ward) => selectWard(ward)}
